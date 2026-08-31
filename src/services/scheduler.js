@@ -28,11 +28,16 @@ const setupSchedules = () => {
     }
   });
 
-  // Yearly reset - 1st of Sivan (Hebrew) - typically May/June
-  // We'll set it to run on June 1st as an approximation
-  cron.schedule('0 0 1 6 *', async () => {
-    console.log('📅 Running yearly reset job (1st of Sivan)');
+  // Yearly reset - 1st of Sivan (Hebrew calendar), which shifts against the
+  // Gregorian calendar every year. Checked once daily at midnight rather
+  // than pinned to a fixed Gregorian date.
+  cron.schedule('0 0 * * *', async () => {
     try {
+      const { HDate, months } = await import('@hebcal/core');
+      const today = new HDate();
+      if (today.getMonth() !== months.SIVAN || today.getDate() !== 1) return;
+
+      console.log('📅 Running yearly reset job (1st of Sivan)');
       await Activity.truncate();
       await Completion.truncate();
       await User.update({ lastActivityUpdate: null }, { where: {} });

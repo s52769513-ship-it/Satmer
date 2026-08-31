@@ -29,6 +29,13 @@ const { PHRASES } = require('../utils/phrases');
 
 const ID_PARAM = 'idNumber';
 const MENU_PARAM = 'menuChoice';
+const CONFIRM1_PARAM = 'confirm1';
+const CONFIRM2_PARAM = 'confirm2';
+const SUBMENU3_PARAM = 'subMenu3';
+const REMINDER_DAY_PARAM = 'reminderDay';
+const REMINDER_HOUR_PARAM = 'reminderHour';
+
+const REMINDER_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 /** A pre-uploaded clip, referenced by name. Falls back to raw text (silent
  * today, but harmless) if the clip hasn't finished uploading yet. */
@@ -63,7 +70,6 @@ async function handlePbxRequest(req, res) {
     }
 
     const idNumberDigits = params[ID_PARAM];
-    const menuChoice = params[MENU_PARAM];
 
     // Step 1: not yet identified — ask for the ID number.
     if (!idNumberDigits) {
@@ -77,19 +83,19 @@ async function handlePbxRequest(req, res) {
       return res.json(simpleMessage('idNotFound', { hangup: true }));
     }
 
+    const menuChoice = params[MENU_PARAM];
+
     // Step 3: identified but no extension chosen yet — main menu.
     if (!menuChoice) {
       return res.json(mainMenu());
     }
 
-    // Step 4: extension chosen — run it.
-    if (menuChoice === '1') return res.json(await extension1(user));
-    if (menuChoice === '2') return res.json(await extension2(user));
-    if (menuChoice === '3') return res.json(await extension3(user));
+    if (menuChoice === '1') return res.json(await handleExtension1(user, params));
+    if (menuChoice === '2') return res.json(await handleExtension2(user, params));
+    if (menuChoice === '3') return res.json(await handleExtension3(user, params));
+    if (menuChoice === '4') return res.json(await handleExtension4(user, params));
 
-    return res.json({
-      actions: [simpleMessage('invalidChoice'), mainMenu()],
-    }.actions);
+    return res.json([simpleMessageModule('invalidChoice'), mainMenu()]);
   } catch (error) {
     console.error('PBX /technoline error:', error);
     res.json(simpleMessage('systemError', { hangup: true }));
@@ -142,22 +148,55 @@ function mainMenu() {
   return {
     type: 'simpleMenu',
     name: MENU_PARAM,
-    enabledKeys: '1,2,3',
+    enabledKeys: '1,2,3,4',
     times: 3,
     timeout: 8,
     files: [clip('mainMenu')],
   };
 }
 
+function simpleMessageModule(phraseKey) {
+  return { type: 'simpleMessage', files: [clip(phraseKey)] };
+}
+
 function simpleMessage(phraseKey, { hangup = false } = {}) {
-  const modules = [{ type: 'simpleMessage', files: [clip(phraseKey)] }];
+  const modules = [simpleMessageModule(phraseKey)];
   if (hangup) modules.push({ type: 'hangup' });
   return modules.length === 1 ? modules[0] : modules;
 }
 
-// ---- extension logic ----
+/** A "press # to confirm, 9 to go back" gate before an irreversible write. */
+function confirmGate(name) {
+  return {
+    type: 'simpleMenu',
+    name,
+    enabledKeys: '#,9',
+    times: 2,
+    timeout: 10,
+    extensionChange: '.',
+  };
+}
 
-async function extension1(user) {
+// ---- Extension 1: weekly activity update ----
+
+async function handleExtension1(user, params) {
+  const weekNumber = getWeekNumber();
+  const confirm1 = params[CONFIRM1_PARAM];
+
+  if (!confirm1) {
+    return [
+      { ...confirmGate(CONFIRM1_PARAM), files: [clip('confirmActivityPrefix'), numberItem(weekNumber), clip('confirmActivitySuffix')] },
+    ];
+  }
+
+  if (confirm1 !== '#') {
+    return [simpleMessageModule('cancelled'), mainMenu()];
+  }
+
+  return recordActivity(user);
+}
+
+async function recordActivity(user) {
   const weekStart = getWeekStartDate();
   const weekNumber = getWeekNumber();
 
@@ -192,7 +231,27 @@ async function extension1(user) {
   ];
 }
 
-async function extension2(user) {
+// ---- Extension 2: monthly completion update ----
+
+async function handleExtension2(user, params) {
+  const completionCount = await Completion.count({ where: { userId: user.id } });
+  const nextNumber = completionCount + 1;
+  const confirm2 = params[CONFIRM2_PARAM];
+
+  if (!confirm2) {
+    return [
+      { ...confirmGate(CONFIRM2_PARAM), files: [clip('confirmCompletionPrefix'), numberItem(nextNumber), clip('confirmCompletionSuffix')] },
+    ];
+  }
+
+  if (confirm2 !== '#') {
+    return [simpleMessageModule('cancelled'), mainMenu()];
+  }
+
+  return recordCompletion(user);
+}
+
+async function recordCompletion(user) {
   const today = new Date();
 
   const lastCompletion = await Completion.findOne({
@@ -233,28 +292,91 @@ async function extension2(user) {
   ];
 }
 
-async function extension3(user) {
+// ---- Extension 3: summary, as three separate sub-options per the spec ----
+
+async function handleExtension3(user, params) {
+  const subMenu3 = params[SUBMENU3_PARAM];
+
+  if (!subMenu3) {
+    return {
+      type: 'simpleMenu',
+      name: SUBMENU3_PARAM,
+      enabledKeys: '1,2,3',
+      times: 3,
+      timeout: 8,
+      extensionChange: '.',
+      files: [clip('summaryMenu')],
+    };
+  }
+
   const activities = await Activity.findAll({ where: { userId: user.id } });
   const completions = await Completion.findAll({ where: { userId: user.id } });
-
   const activityPoints = activities.reduce((sum, a) => sum + (a.points || 0), 0);
   const completionPoints = completions.reduce((sum, c) => sum + (c.points || 0), 0);
-  const totalPoints = activityPoints + completionPoints;
-  const participationCount = activities.filter(a => a.participated).length;
+
+  if (subMenu3 === '1') {
+    return [
+      { type: 'simpleMessage', files: [clip('summaryActivityPrefix'), numberItem(activityPoints), clip('summaryActivitySuffix')] },
+      { type: 'hangup' },
+    ];
+  }
+  if (subMenu3 === '2') {
+    return [
+      { type: 'simpleMessage', files: [clip('summaryCompletionsPrefix'), numberItem(completionPoints), clip('summaryCompletionsSuffixOnly')] },
+      { type: 'hangup' },
+    ];
+  }
+  if (subMenu3 === '3') {
+    return [
+      { type: 'simpleMessage', files: [clip('summaryTotalPrefix'), numberItem(activityPoints + completionPoints), clip('summaryTotalSuffix')] },
+      { type: 'hangup' },
+    ];
+  }
+
+  return [simpleMessageModule('invalidChoice'), mainMenu()];
+}
+
+// ---- Extension 4: choose weekly reminder day/hour ----
+
+async function handleExtension4(user, params) {
+  const day = params[REMINDER_DAY_PARAM];
+  const hour = params[REMINDER_HOUR_PARAM];
+
+  if (!day) {
+    return {
+      type: 'simpleMenu',
+      name: REMINDER_DAY_PARAM,
+      enabledKeys: '1,2,3,4,5,6,7',
+      times: 3,
+      timeout: 8,
+      extensionChange: '.',
+      files: [clip('askReminderDay')],
+    };
+  }
+
+  if (!hour) {
+    return {
+      type: 'getDTMF',
+      name: REMINDER_HOUR_PARAM,
+      max: 2,
+      min: 1,
+      timeout: 8,
+      skipKey: '#',
+      confirmType: 'no',
+      files: [clip('askReminderHour')],
+    };
+  }
+
+  const hourNum = Number(hour);
+  if (!Number.isInteger(hourNum) || hourNum < 0 || hourNum > 23) {
+    return [simpleMessageModule('invalidChoice'), mainMenu()];
+  }
+
+  const dayName = REMINDER_DAYS[Number(day) - 1];
+  await user.update({ notificationDay: dayName, notificationHour: hourNum });
 
   return [
-    {
-      type: 'simpleMessage',
-      files: [
-        clip('summaryParticipatedPrefix'),
-        numberItem(participationCount),
-        clip('summaryParticipatedSuffix'),
-        numberItem(completions.length),
-        clip('summaryCompletionsSuffix'),
-        numberItem(totalPoints),
-        clip('summaryPointsSuffix'),
-      ],
-    },
+    { type: 'simpleMessage', files: [clip('reminderSavedPrefix'), numberItem(hourNum), clip('reminderSavedSuffix')] },
     { type: 'hangup' },
   ];
 }
