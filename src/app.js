@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./models');
 const setupSchedules = require('./services/scheduler');
+const { speechCatalog } = require('./services/speech');
+const { PHRASES } = require('./utils/phrases');
 
 const app = express();
 
@@ -73,6 +75,16 @@ const startServer = async () => {
 
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
+    });
+
+    // Fire-and-forget: synthesize + upload the fixed prompt catalog to
+    // Technoline so the phone line has real audio ready. Doesn't block
+    // startup — a caller before this finishes just gets silence for a
+    // still-unready prompt, same as before this existed.
+    speechCatalog.warm(PHRASES).then(({ ready, failed }) => {
+      console.log(`🔊 Speech catalog warmed: ${ready} ready, ${failed} failed`);
+    }).catch((error) => {
+      console.error('❌ Speech catalog warm-up failed:', error.message);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

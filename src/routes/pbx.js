@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { User, Activity, Completion, ActivityLog } = require('../models');
 const { validateIdNumber, getWeekStartDate, getWeekNumber, canUpdateActivityThisWeek, canUpdateCompletionThisMonth } = require('../utils/validators');
+const { speechCatalog } = require('../services/speech');
+const { PHRASES } = require('../utils/phrases');
 
 /**
  * Technoline PBX Extension "API" module — inbound call handler.
@@ -16,10 +18,30 @@ const { validateIdNumber, getWeekStartDate, getWeekNumber, canUpdateActivityThis
  * Unlike a phone-based system that trusts Caller ID, this line requires the
  * caller to key in their Israeli ID number (מ.ז) before anything else —
  * that is the authentication, not the calling number.
+ *
+ * Speech: Technoline's own `text` TTS does not reliably synthesize new
+ * text on this line (confirmed empirically). Every fixed prompt is
+ * pre-synthesized and uploaded to a dedicated audio extension (see
+ * services/speech.js) and referenced here by `fileName`; only truly
+ * dynamic values (week numbers, point totals) go through the `number`
+ * item type, which Technoline speaks natively without synthesis.
  */
 
 const ID_PARAM = 'idNumber';
 const MENU_PARAM = 'menuChoice';
+
+/** A pre-uploaded clip, referenced by name. Falls back to raw text (silent
+ * today, but harmless) if the clip hasn't finished uploading yet. */
+function clip(phraseKey) {
+  const text = PHRASES[phraseKey];
+  return speechCatalog.isReady(text)
+    ? { fileName: speechCatalog.fileNameFor(text) }
+    : { text };
+}
+
+function numberItem(value) {
+  return { number: String(value) };
+}
 
 async function handlePbxRequest(req, res) {
   try {
@@ -34,7 +56,7 @@ async function handlePbxRequest(req, res) {
 
     const token = process.env.TECHNOLINE_PBX_TOKEN;
     if (token && params.token !== token) {
-      return res.json(simpleMessage('שגיאת הזדהות. אנא פני למנהלת המערכת.'));
+      return res.json(simpleMessage('authError'));
     }
 
     const idNumberDigits = params[ID_PARAM];
@@ -49,7 +71,7 @@ async function handlePbxRequest(req, res) {
     const user = await User.findOne({ where: { idNumber: idNumberDigits } });
 
     if (!validateIdNumber(idNumberDigits) || !user || !user.isActive) {
-      return res.json(simpleMessage('מספר זהות לא נמצא במערכת. אנא פני למנהלת המערכת.', { hangup: true }));
+      return res.json(simpleMessage('idNotFound', { hangup: true }));
     }
 
     // Step 3: identified but no extension chosen yet — main menu.
@@ -62,10 +84,12 @@ async function handlePbxRequest(req, res) {
     if (menuChoice === '2') return res.json(await extension2(user));
     if (menuChoice === '3') return res.json(await extension3(user));
 
-    return res.json(simpleMessage('בחירה לא תקינה.', { then: mainMenu() }));
+    return res.json({
+      actions: [simpleMessage('invalidChoice'), mainMenu()],
+    }.actions);
   } catch (error) {
     console.error('PBX /technoline error:', error);
-    res.json(simpleMessage('אירעה שגיאה במערכת. אנא נסי שוב מאוחר יותר.', { hangup: true }));
+    res.json(simpleMessage('systemError', { hangup: true }));
   }
 }
 
@@ -76,12 +100,15 @@ router.post('/technoline', handlePbxRequest);
 /**
  * Debugging aid only: a fixed announcement + hangup, no getDTMF, no DB
  * lookups. Point a Technoline extension at this temporarily to isolate
- * whether TTS/audio playback works at all, independent of our call flow
- * logic. Remove once the real /technoline endpoint is confirmed working.
+ * whether audio playback works at all, independent of our call flow logic.
  */
 function testAnnouncement() {
+  const text = 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.';
+  const files = speechCatalog.isReady(text)
+    ? [{ fileName: speechCatalog.fileNameFor(text) }]
+    : [{ text }];
   return [
-    { type: 'simpleMessage', files: [{ text: 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.' }] },
+    { type: 'simpleMessage', files },
     { type: 'hangup' },
   ];
 }
@@ -104,7 +131,7 @@ function askForIdNumber() {
     timeout: 12,
     skipKey: '#',
     confirmType: 'no',
-    files: [{ text: 'ברוכים הבאים למערכת עדכון פעילות חסד. אנא הקישי את מספר תעודת הזהות שלך, ולאחר מכן הקישי סולמית.' }],
+    files: [clip('welcomeAskId')],
   };
 }
 
@@ -115,18 +142,13 @@ function mainMenu() {
     enabledKeys: '1,2,3',
     times: 3,
     timeout: 8,
-    files: [
-      {
-        text: 'לעדכון פעילות חסד שבועית הקישי 1. לעדכון השלמה הקישי 2. לשמיעת סיכום הזכויות שלך הקישי 3.',
-      },
-    ],
+    files: [clip('mainMenu')],
   };
 }
 
-function simpleMessage(text, { hangup = false, then = null } = {}) {
-  const modules = [{ type: 'simpleMessage', files: [{ text }] }];
+function simpleMessage(phraseKey, { hangup = false } = {}) {
+  const modules = [{ type: 'simpleMessage', files: [clip(phraseKey)] }];
   if (hangup) modules.push({ type: 'hangup' });
-  if (then) return modules.concat(Array.isArray(then) ? then : [then]);
   return modules.length === 1 ? modules[0] : modules;
 }
 
@@ -137,7 +159,7 @@ async function extension1(user) {
   const weekNumber = getWeekNumber();
 
   if (user.lastActivityUpdate && !canUpdateActivityThisWeek(user.lastActivityUpdate)) {
-    return simpleMessage(`כבר עדכנת את פעילות השבוע. ניתן לעדכן שוב במוצאי שבת.`, { hangup: true });
+    return simpleMessage('alreadyUpdatedThisWeek', { hangup: true });
   }
 
   const activity = await Activity.create({
@@ -158,7 +180,13 @@ async function extension1(user) {
     details: { weekNumber, points: activity.points },
   });
 
-  return simpleMessage(`עידכנת על השתתפותך בפעילות החסד לשבוע ${weekNumber}. תודה רבה ויישר כח!`, { hangup: true });
+  return [
+    {
+      type: 'simpleMessage',
+      files: [clip('activityUpdatedPrefix'), numberItem(weekNumber), clip('activityUpdatedSuffix')],
+    },
+    { type: 'hangup' },
+  ];
 }
 
 async function extension2(user) {
@@ -170,7 +198,7 @@ async function extension2(user) {
   });
 
   if (lastCompletion && !canUpdateCompletionThisMonth(lastCompletion.createdAt)) {
-    return simpleMessage('כבר עדכנת השלמה בחודש זה. ניתן לעדכן שוב בתחילת החודש הבא.', { hangup: true });
+    return simpleMessage('alreadyUpdatedThisMonth', { hangup: true });
   }
 
   const completionCount = await Completion.count({ where: { userId: user.id } });
@@ -193,7 +221,13 @@ async function extension2(user) {
     details: { completionNumber: nextNumber },
   });
 
-  return simpleMessage(`עידכנת על השלמה מספר ${nextNumber} בשנה זו. כל הכבוד!`, { hangup: true });
+  return [
+    {
+      type: 'simpleMessage',
+      files: [clip('completionUpdatedPrefix'), numberItem(nextNumber), clip('completionUpdatedSuffix')],
+    },
+    { type: 'hangup' },
+  ];
 }
 
 async function extension3(user) {
@@ -205,10 +239,21 @@ async function extension3(user) {
   const totalPoints = activityPoints + completionPoints;
   const participationCount = activities.filter(a => a.participated).length;
 
-  return simpleMessage(
-    `סיכום הזכויות שלך: השתתפת בפעילות החסד ${participationCount} פעמים, השלמת ${completions.length} השלמות, ובסך הכל צברת ${totalPoints} נקודות. תודה על ההשתתפות!`,
-    { hangup: true }
-  );
+  return [
+    {
+      type: 'simpleMessage',
+      files: [
+        clip('summaryParticipatedPrefix'),
+        numberItem(participationCount),
+        clip('summaryParticipatedSuffix'),
+        numberItem(completions.length),
+        clip('summaryCompletionsSuffix'),
+        numberItem(totalPoints),
+        clip('summaryPointsSuffix'),
+      ],
+    },
+    { type: 'hangup' },
+  ];
 }
 
 module.exports = router;
