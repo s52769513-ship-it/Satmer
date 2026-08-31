@@ -1,10 +1,12 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const db = require('./models');
 const setupSchedules = require('./services/scheduler');
 const { speechCatalog } = require('./services/speech');
 const { PHRASES } = require('./utils/phrases');
+const ensureAdmin = require('./utils/ensure-admin');
 
 const app = express();
 
@@ -44,6 +46,16 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/pbx', require('./routes/pbx'));
 
+// Serve the built admin frontend (frontend/dist), with SPA fallback for
+// client-side routing on any non-API, non-file path.
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(frontendDist));
+app.get(/^(?!\/api|\/health).*/, (req, res, next) => {
+  res.sendFile(path.join(frontendDist, 'index.html'), (err) => {
+    if (err) next();
+  });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -68,6 +80,8 @@ const startServer = async () => {
     // Sync database (use alter: true in production with caution)
     await db.sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
     console.log('✅ Database synced');
+
+    await ensureAdmin();
 
     // Setup scheduled jobs
     setupSchedules();
