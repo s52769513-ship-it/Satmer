@@ -38,9 +38,14 @@ const REMINDER_HOUR_PARAM = 'reminderHour';
 
 const REMINDER_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-/** A pre-uploaded clip, referenced by name. Falls back to raw text (silent
- * today, but harmless) if the clip hasn't finished uploading yet. */
+/** A pre-uploaded clip, referenced by name. Prefers an admin's own
+ * recording (uploaded via the site's Recordings page) over the
+ * TTS-synthesized version, when one exists for this phrase. Falls back to
+ * raw text (silent today, but harmless) if neither is ready yet. */
 function clip(phraseKey) {
+  if (speechCatalog.hasOverride(phraseKey)) {
+    return { fileName: speechCatalog.overrideName(phraseKey), extensionId: speechCatalog.extensionId };
+  }
   return clipText(PHRASES[phraseKey]);
 }
 
@@ -93,7 +98,7 @@ async function handlePbxRequest(req, res) {
       return res.json(simpleMessage('idNotFound', { hangup: true }));
     }
 
-    const menuChoice = params[MENU_PARAM];
+    const menuChoice = params[MENU_PARAM]?.trim();
 
     // Step 3: identified but no extension chosen yet — main menu.
     if (!menuChoice) {

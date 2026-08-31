@@ -103,6 +103,39 @@ class SpeechCatalog {
     }
     return { ready, failed };
   }
+
+  // ---- admin-recorded overrides for named PHRASES entries ----
+  //
+  // Lets an admin replace any fixed prompt's synthesized voice with her own
+  // recording, uploaded under a fixed name keyed to the phrase — so call
+  // code can keep asking "is there an override for `activityUpdatedPrefix`"
+  // without knowing whether the answer today is a human recording or TTS.
+
+  overrideName(phraseKey) {
+    return `override_${phraseKey}`;
+  }
+
+  hasOverride(phraseKey) {
+    return this.ready.has(this.overrideName(phraseKey));
+  }
+
+  /** Uploads an admin recording as the override for `phraseKey`. */
+  async setOverride(phraseKey, audioBuffer, originalFileName) {
+    if (!this.extensionId) throw new Error('TECHNOLINE_AUDIO_EXTENSION not configured');
+    const name = this.overrideName(phraseKey);
+    await technoline.uploadFile(this.extensionId, audioBuffer, originalFileName, { name, checkDuplicate: 'BACKUP' });
+    this.ready.add(name);
+  }
+
+  /** Removes the override for `phraseKey`, so playback falls back to TTS. */
+  async clearOverride(phraseKey) {
+    if (!this.extensionId) return;
+    const name = this.overrideName(phraseKey);
+    const files = await technoline.filesList(this.extensionId);
+    const match = (Array.isArray(files) ? files : []).find(f => f.name === name);
+    if (match) await technoline.fileDelete(match.id, this.extensionId);
+    this.ready.delete(name);
+  }
 }
 
 module.exports = { SpeechCatalog, clipName, speechCatalog: new SpeechCatalog() };

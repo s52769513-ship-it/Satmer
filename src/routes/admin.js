@@ -8,6 +8,8 @@ const { validateIdNumber } = require('../utils/validators');
 const technoline = require('../services/technoline');
 const notifications = require('../services/notifications');
 const { getHebrewDateString } = require('../utils/hebrew-date');
+const { speechCatalog } = require('../services/speech');
+const { PHRASES } = require('../utils/phrases');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -281,6 +283,62 @@ router.delete('/recordings/:fileId', authenticateToken, authorizeAdmin, async (r
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete recording', message: error.message });
+  }
+});
+
+// ---- Phone prompt overrides (record-your-own-voice for fixed prompts) ----
+//
+// Every fixed thing the phone line says (see src/utils/phrases.js) is
+// synthesized by TTS by default. An admin can instead upload her own
+// recording for any one of them; call-time code in routes/pbx.js already
+// prefers that recording over TTS whenever one exists. Only the fixed
+// prompts are recordable this way — dynamic values (the parasha name, a
+// week number) always stay TTS/native, so they can change automatically.
+
+// List every phrase key + its default text + whether a recording exists.
+router.get('/phrases', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    await speechCatalog.adopt();
+    const phrases = Object.entries(PHRASES).map(([key, text]) => ({
+      key,
+      text,
+      hasOverride: speechCatalog.hasOverride(key),
+    }));
+    res.json(phrases);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to list phrases', message: error.message });
+  }
+});
+
+// Upload a recording as the override for one phrase (admin only)
+router.post('/phrases/:phraseKey/recording', authenticateToken, authorizeAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const { phraseKey } = req.params;
+    if (!PHRASES[phraseKey]) {
+      return res.status(404).json({ error: 'Unknown phrase key' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    await speechCatalog.setOverride(phraseKey, req.file.buffer, req.file.originalname);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to upload recording', message: error.message });
+  }
+});
+
+// Remove a phrase's recording, falling back to TTS again (admin only)
+router.delete('/phrases/:phraseKey/recording', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const { phraseKey } = req.params;
+    if (!PHRASES[phraseKey]) {
+      return res.status(404).json({ error: 'Unknown phrase key' });
+    }
+    await speechCatalog.clearOverride(phraseKey);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove recording', message: error.message });
   }
 });
 
