@@ -71,18 +71,14 @@ router.post('/technoline', handlePbxRequest);
  * whether TTS/audio playback works at all, independent of our call flow
  * logic. Remove once the real /technoline endpoint is confirmed working.
  */
-router.get('/technoline-test', (req, res) => {
-  res.json({
-    type: 'simpleMessage',
-    files: [{ text: 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.' }],
-  });
-});
-router.post('/technoline-test', (req, res) => {
-  res.json({
-    type: 'simpleMessage',
-    files: [{ text: 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.' }],
-  });
-});
+function testAnnouncement() {
+  return [
+    { type: 'simpleMessage', files: [{ text: 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.' }] },
+    { type: 'hangup' },
+  ];
+}
+router.get('/technoline-test', (req, res) => res.json(testAnnouncement()));
+router.post('/technoline-test', (req, res) => res.json(testAnnouncement()));
 
 // ---- module builders ----
 
