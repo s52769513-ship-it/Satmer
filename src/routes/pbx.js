@@ -65,6 +65,25 @@ router.get('/technoline', handlePbxRequest);
 // Their PBX may prefer POST; same handling either way.
 router.post('/technoline', handlePbxRequest);
 
+/**
+ * Debugging aid only: a fixed announcement + hangup, no getDTMF, no DB
+ * lookups. Point a Technoline extension at this temporarily to isolate
+ * whether TTS/audio playback works at all, independent of our call flow
+ * logic. Remove once the real /technoline endpoint is confirmed working.
+ */
+router.get('/technoline-test', (req, res) => {
+  res.json({
+    type: 'simpleMessage',
+    files: [{ text: 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.' }],
+  });
+});
+router.post('/technoline-test', (req, res) => {
+  res.json({
+    type: 'simpleMessage',
+    files: [{ text: 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.' }],
+  });
+});
+
 // ---- module builders ----
 
 function askForIdNumber() {
