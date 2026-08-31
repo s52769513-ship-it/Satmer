@@ -16,33 +16,33 @@ class TechnolineService {
   // Setup IVR extensions
   async setupExtensions() {
     try {
-      // Extension 1: Activity Update
+      // שלוחה 1: עדכון פעילות שבועי
       const ext1 = await this.setupExtension({
         extensionNumber: 1,
-        name: 'Weekly Activity Update',
-        greeting: 'Welcome to Chesed Activity System. Press 1 to update your weekly activity.',
+        name: 'עדכון פעילות חסד שבועי',
+        greeting: 'ברוכים הבאים למערכת עדכון פעילות החסד. לחצי 1 כדי לעדכן את פעילותך השבועית.',
         actions: [
           { digit: '1', action: 'UPDATE_ACTIVITY', url: `${process.env.APP_URL}/api/ivr/extension-1/status` },
           { digit: '#', action: 'CONFIRM', url: `${process.env.APP_URL}/api/ivr/extension-1/confirm` },
         ],
       });
 
-      // Extension 2: Completion Update
+      // שלוחה 2: עדכון השלמות
       const ext2 = await this.setupExtension({
         extensionNumber: 2,
-        name: 'Completion Update',
-        greeting: 'You are in the Completion Update extension. Press 1 to record a new completion.',
+        name: 'עדכון השלמות',
+        greeting: 'אתם בהרחבה לעדכון השלמות. לחצי 1 כדי לרשום השלמה חדשה.',
         actions: [
           { digit: '1', action: 'UPDATE_COMPLETION', url: `${process.env.APP_URL}/api/ivr/extension-2/status` },
           { digit: '#', action: 'CONFIRM', url: `${process.env.APP_URL}/api/ivr/extension-2/confirm` },
         ],
       });
 
-      // Extension 3: View Summary
+      // שלוחה 3: צפייה בסיכום ההישגים
       const ext3 = await this.setupExtension({
         extensionNumber: 3,
-        name: 'Summary of Achievements',
-        greeting: 'You can now hear your achievements summary.',
+        name: 'סיכום ההישגים',
+        greeting: 'כעת תוכלי לשמוע את סיכום ההישגים שלך.',
         actions: [
           { digit: '1', action: 'SUMMARY', url: `${process.env.APP_URL}/api/ivr/extension-3/summary` },
         ],

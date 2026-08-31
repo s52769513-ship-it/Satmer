@@ -1,143 +1,131 @@
 const axios = require('axios');
-const TelegramBot = require('node-telegram-bot-api');
 
 class NotificationService {
   constructor() {
-    this.telegramBot = process.env.TELEGRAM_BOT_TOKEN
-      ? new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false })
-      : null;
+    this.apiKey = process.env.TECHNOLINE_API_KEY;
+    this.apiUrl = process.env.TECHNOLINE_API_URL || 'https://api.ipsales.co.il/api';
   }
 
-  // Send Telegram notification
-  async sendTelegramNotification(userId, message, chatId) {
+  // Send voice notification via Technoline phone system
+  async sendVoiceNotification(phoneNumber, message, language = 'he') {
     try {
-      if (!this.telegramBot || !chatId) {
-        console.warn('Telegram bot not configured or chat ID missing');
-        return null;
-      }
+      console.log(`📞 Sending voice notification to ${phoneNumber}`);
 
-      const response = await this.telegramBot.sendMessage(chatId, message, {
-        parse_mode: 'HTML',
-      });
-
-      return response;
-    } catch (error) {
-      console.error('Failed to send Telegram notification:', error);
-      throw error;
-    }
-  }
-
-  // Send SMS via Technoline
-  async sendSMS(phoneNumber, message) {
-    try {
       const response = await axios.post(
-        `${process.env.TECHNOLINE_API_URL}/messages/sms`,
+        `${this.apiUrl}/calls/voice-notification`,
         {
           to: phoneNumber,
           message,
+          language,
+          priority: 'high',
+          retry: 3,
         },
         {
           headers: {
-            'Authorization': `Bearer ${process.env.TECHNOLINE_API_KEY}`,
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
+      console.log(`✅ Voice notification sent to ${phoneNumber}`);
       return response.data;
     } catch (error) {
-      console.error('Failed to send SMS:', error);
+      console.error(`❌ Failed to send voice notification to ${phoneNumber}:`, error.message);
       throw error;
     }
   }
 
-  // Send voice call notification
-  async sendVoiceCall(phoneNumber, message) {
+  // Send IVR message (through phone system)
+  async sendIVRMessage(phoneNumber, extensionNumber, message) {
     try {
+      console.log(`📞 Sending IVR message to ${phoneNumber} - Extension ${extensionNumber}`);
+
       const response = await axios.post(
-        `${process.env.TECHNOLINE_API_URL}/calls/voice-notification`,
+        `${this.apiUrl}/ivr/send-message`,
         {
-          to: phoneNumber,
+          phoneNumber,
+          extensionNumber,
           message,
           language: 'he',
         },
         {
           headers: {
-            'Authorization': `Bearer ${process.env.TECHNOLINE_API_KEY}`,
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
+      console.log(`✅ IVR message sent to ${phoneNumber}`);
       return response.data;
     } catch (error) {
-      console.error('Failed to send voice call:', error);
+      console.error(`❌ Failed to send IVR message:`, error.message);
       throw error;
     }
   }
 
-  // Send email notification
-  async sendEmail(email, subject, body) {
+  // Send weekly reminder via voice call
+  async sendWeeklyReminder(user) {
     try {
-      const response = await axios.post(
-        `${process.env.TECHNOLINE_API_URL}/email/send`,
-        {
-          to: email,
-          subject,
-          body,
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.TECHNOLINE_API_KEY}`,
-          },
-        }
-      );
+      if (!user.phone) {
+        console.warn(`⚠️ User ${user.name} has no phone number`);
+        return null;
+      }
 
-      return response.data;
+      const message = `שלום ${user.name}! זה זמן לעדכן את פעילות החסד שלך לשבוע זה. לחצי 1 בהרחבה 1 כדי לעדכן.`;
+
+      return await this.sendVoiceNotification(user.phone, message, 'he');
     } catch (error) {
-      console.error('Failed to send email:', error);
+      console.error(`Failed to send reminder to ${user.name}:`, error.message);
       throw error;
     }
   }
 
-  // Send notification via multiple channels
-  async sendMultiChannel(user, message, channels = ['sms', 'telegram']) {
+  // Send achievement notification via voice
+  async sendAchievementNotification(user, achievement) {
+    try {
+      if (!user.phone) {
+        console.warn(`⚠️ User ${user.name} has no phone number`);
+        return null;
+      }
+
+      const message = `כל הכבוד ${user.name}! ניצחנו ${achievement}. מזל טוב!`;
+
+      return await this.sendVoiceNotification(user.phone, message, 'he');
+    } catch (error) {
+      console.error(`Failed to send achievement notification:`, error.message);
+      throw error;
+    }
+  }
+
+  // Send admin broadcast message to all users
+  async sendBroadcastMessage(users, message) {
     const results = {};
 
-    if (channels.includes('sms') && user.phone) {
-      try {
-        results.sms = await this.sendSMS(user.phone, message);
-      } catch (error) {
-        results.sms = { error: error.message };
+    for (const user of users) {
+      if (!user.phone || !user.isActive) {
+        continue;
       }
-    }
 
-    if (channels.includes('telegram') && user.telegramChatId) {
       try {
-        results.telegram = await this.sendTelegramNotification(user.id, message, user.telegramChatId);
+        results[user.id] = await this.sendVoiceNotification(user.phone, message, 'he');
       } catch (error) {
-        results.telegram = { error: error.message };
-      }
-    }
-
-    if (channels.includes('email') && user.email) {
-      try {
-        results.email = await this.sendEmail(user.email, 'Chesed Activity Reminder', message);
-      } catch (error) {
-        results.email = { error: error.message };
+        results[user.id] = { error: error.message };
       }
     }
 
     return results;
   }
 
-  // Send weekly reminder to all users
+  // Send weekly reminders to all users with scheduled notification time
   async sendWeeklyReminders(users) {
+    console.log(`📞 Sending weekly reminders to ${users.length} users...`);
     const results = {};
 
     for (const user of users) {
-      const message = `שלום ${user.name}! 👋\n\nזה זמן לעדכן את פעילות החסד שלך לשבוע זה.\n\nלחצי 1 בהרחבה 1 כדי לעדכן.`;
-
       try {
-        results[user.id] = await this.sendMultiChannel(user, message, ['sms', 'telegram']);
+        results[user.id] = await this.sendWeeklyReminder(user);
       } catch (error) {
         results[user.id] = { error: error.message };
       }

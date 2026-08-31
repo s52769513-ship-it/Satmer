@@ -58,8 +58,17 @@ const setupSchedules = () => {
         },
       });
 
-      for (const user of users) {
-        await sendWeeklyReminder(user);
+      if (users.length > 0) {
+        console.log(`📞 Sending voice notifications to ${users.length} users at ${dayName} ${hour}:00`);
+        const notificationService = require('./notifications');
+
+        for (const user of users) {
+          try {
+            await notificationService.sendWeeklyReminder(user);
+          } catch (error) {
+            console.error(`Failed to send reminder to ${user.name}:`, error.message);
+          }
+        }
       }
     } catch (error) {
       console.error('❌ Notification sender error:', error);
@@ -69,36 +78,6 @@ const setupSchedules = () => {
   console.log('✅ All scheduled jobs initialized');
 };
 
-async function sendWeeklyReminder(user) {
-  try {
-    const weekStart = getWeekStartDate();
-    const weekNumber = getWeekNumber();
-
-    // Check if user already updated this week
-    const activity = await Activity.findOne({
-      where: { userId: user.id, weekStartDate: weekStart },
-    });
-
-    const message = activity
-      ? `You've already updated your activity for week ${weekNumber}`
-      : `Don't forget to update your activity for week ${weekNumber}. Press extension 1 to update.`;
-
-    // Create notification
-    await UserNotification.create({
-      userId: user.id,
-      type: 'weekly_reminder',
-      title: `Weekly Reminder - Week ${weekNumber}`,
-      message,
-    });
-
-    console.log(`📨 Notification sent to ${user.name}`);
-
-    // TODO: Integrate with Telegram or other notification service
-    // await sendTelegramNotification(user, message);
-  } catch (error) {
-    console.error(`Failed to send reminder to user ${user.id}:`, error);
-  }
-}
 
 function getDayName(dayIndex) {
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];

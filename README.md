@@ -40,12 +40,13 @@ A comprehensive Interactive Voice Response (IVR) system for managing weekly ches
 - **Yearly Reports**: Comprehensive summary of all users' achievements
 - Points calculation and awards eligibility
 
-### 🔔 Notifications
+### 🔔 Notifications (Voice via Technoline)
 
-- Weekly reminder SMS/Telegram notifications
-- Configurable notification time per user
-- Achievement notifications
-- Admin broadcast messages
+- Weekly reminder voice calls via Technoline phone system
+- Configurable notification time per user (day and hour)
+- Achievement notifications via voice call
+- Admin broadcast messages to all users
+- All notifications delivered through the IVR system
 
 ### 🔐 Security
 
