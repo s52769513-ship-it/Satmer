@@ -30,7 +30,7 @@ app.use('/api/activities', require('./routes/activities'));
 app.use('/api/completions', require('./routes/completions'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/reports', require('./routes/reports'));
-app.use('/api/ivr-webhook', require('./routes/webhook'));
+app.use('/api/pbx', require('./routes/pbx'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
