@@ -7,6 +7,7 @@ const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
 const { validateIdNumber } = require('../utils/validators');
 const technoline = require('../services/technoline');
 const notifications = require('../services/notifications');
+const { getHebrewDateString } = require('../utils/hebrew-date');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -175,7 +176,11 @@ router.get('/activity-logs', authenticateToken, authorizeAdmin, async (req, res)
       order: [['createdAt', 'DESC']],
     });
 
-    res.json(logs);
+    const withHebrewDate = await Promise.all(
+      logs.map(async (log) => ({ ...log.toJSON(), hebrewDate: await getHebrewDateString(log.createdAt) }))
+    );
+
+    res.json(withHebrewDate);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch logs' });
   }
@@ -237,7 +242,11 @@ router.get('/recordings', authenticateToken, authorizeAdmin, async (req, res) =>
       return res.status(400).json({ error: 'TECHNOLINE_AUDIO_EXTENSION not configured' });
     }
     const files = await technoline.filesList(extensionId);
-    res.json(Array.isArray(files) ? files : []);
+    const list = Array.isArray(files) ? files : [];
+    const withHebrewDate = await Promise.all(
+      list.map(async (f) => ({ ...f, hebrewDate: f.time ? await getHebrewDateString(new Date(Number(f.time) * 1000)) : null }))
+    );
+    res.json(withHebrewDate);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch recordings', message: error.message });
   }

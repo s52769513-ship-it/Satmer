@@ -82,7 +82,7 @@ export default function Recordings() {
               {files.map((file) => (
                 <tr key={file.id}>
                   <td>{file.name}</td>
-                  <td>{file.time ? new Date(Number(file.time) * 1000).toLocaleDateString('he-IL') : '—'}</td>
+                  <td>{file.hebrewDate || '—'}</td>
                   <td>
                     <button className="btn-secondary btn-danger" onClick={() => handleDelete(file.id)}>
                       מחיקה

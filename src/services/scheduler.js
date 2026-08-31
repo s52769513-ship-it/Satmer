@@ -47,6 +47,20 @@ const setupSchedules = () => {
     }
   });
 
+  // Keep the current week's parasha name synthesized and ready. Runs daily
+  // (not just at startup) so a server that stays up all week still picks
+  // up the change at motza'ei Shabbat without needing a restart.
+  cron.schedule('5 0 * * *', async () => {
+    try {
+      const { getParashaName } = require('../utils/hebrew-date');
+      const { speechCatalog } = require('./speech');
+      const parasha = await getParashaName();
+      if (parasha) await speechCatalog.ensure(parasha);
+    } catch (error) {
+      console.error('❌ Parasha speech warm-up failed:', error.message);
+    }
+  });
+
   // Weekly notification sender - Run every minute to check if notifications need to be sent
   cron.schedule('* * * * *', async () => {
     try {

@@ -3,6 +3,7 @@ const router = express.Router();
 const { Op } = require('sequelize');
 const { Activity, Completion, User } = require('../models');
 const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
+const { getHebrewDateString } = require('../utils/hebrew-date');
 
 // ---- shared row builders (used by both preview and CSV download) ----
 
@@ -25,14 +26,15 @@ async function weeklyRows({ week, year, search, participated }) {
     order: [[{ model: User, as: 'user' }, 'name', 'ASC']],
   });
 
-  return activities.map(a => ({
+  return Promise.all(activities.map(async a => ({
     name: a.user.name,
     idNumber: a.user.idNumber,
     week: a.weekNumber,
     parasha: a.parashaName || '',
+    hebrewDate: await getHebrewDateString(a.weekStartDate),
     participated: a.participated,
     points: a.points,
-  }));
+  })));
 }
 
 async function monthlyRows({ month, year, search }) {
@@ -47,7 +49,7 @@ async function monthlyRows({ month, year, search }) {
     order: [['completedAt', 'ASC']],
   });
 
-  return completions.map(c => ({
+  return Promise.all(completions.map(async c => ({
     name: c.user.name,
     idNumber: c.user.idNumber,
     completionNumber: c.completionNumber,
@@ -55,7 +57,8 @@ async function monthlyRows({ month, year, search }) {
     year: currentYear,
     points: c.points,
     date: c.completedAt,
-  }));
+    hebrewDate: await getHebrewDateString(c.completedAt),
+  })));
 }
 
 async function yearlyRows({ year, search, minPoints }) {
@@ -126,8 +129,8 @@ router.get('/weekly', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
     const rows = await weeklyRows(req.query);
     const csv = generateCSV(
-      ['שם', 'תעודת זהות', 'שבוע', 'פרשה', 'השתתפה', 'נקודות'],
-      rows.map(r => [r.name, r.idNumber, r.week, r.parasha, r.participated ? 'כן' : 'לא', r.points])
+      ['שם', 'תעודת זהות', 'שבוע', 'פרשה', 'תאריך עברי', 'השתתפה', 'נקודות'],
+      rows.map(r => [r.name, r.idNumber, r.week, r.parasha, r.hebrewDate, r.participated ? 'כן' : 'לא', r.points])
     );
     sendCsv(res, csv, `activities_week_${req.query.week}_${req.query.year || new Date().getFullYear()}.csv`);
   } catch (error) {
@@ -140,8 +143,8 @@ router.get('/monthly', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
     const rows = await monthlyRows(req.query);
     const csv = generateCSV(
-      ['שם', 'תעודת זהות', 'מס\' השלמה', 'חודש', 'שנה', 'נקודות', 'תאריך'],
-      rows.map(r => [r.name, r.idNumber, r.completionNumber, r.month, r.year, r.points, new Date(r.date).toLocaleDateString('he-IL')])
+      ['שם', 'תעודת זהות', 'מס\' השלמה', 'חודש', 'שנה', 'נקודות', 'תאריך עברי'],
+      rows.map(r => [r.name, r.idNumber, r.completionNumber, r.month, r.year, r.points, r.hebrewDate])
     );
     sendCsv(res, csv, `completions_${req.query.month}_${req.query.year || new Date().getFullYear()}.csv`);
   } catch (error) {

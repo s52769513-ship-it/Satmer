@@ -27,7 +27,7 @@ const PHRASES = {
   // spoken natively by Technoline via `number` items, no synthesis needed.
   confirmActivityPrefix: 'עידכנתם על השתתפותכם בפעילות החסד בשבוע',
   confirmActivitySuffix: 'אם זה נכון הקישי סולמית לאישור, או 9 לחזרה לתפריט.',
-  activityUpdatedPrefix: 'עידכנת על השתתפותך בפעילות החסד לשבוע',
+  activityUpdatedPrefix: 'עידכנת על השתתפותך בפעילות החסד בשבוע',
   activityUpdatedSuffix: 'תודה רבה ויישר כח!',
 
   confirmCompletionPrefix: 'עידכנתם על השלמה מספר',

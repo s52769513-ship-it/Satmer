@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../services/api';
 
+const DAY_LABELS = {
+  sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי', wednesday: 'רביעי',
+  thursday: 'חמישי', friday: 'שישי', saturday: 'שבת',
+};
+
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,6 +165,7 @@ export default function Users() {
                   <th>שם</th>
                   <th>תעודת זהות</th>
                   <th>טלפון</th>
+                  <th>תזכורת שבועית</th>
                   <th>סטטוס</th>
                   <th>פעולות</th>
                 </tr>
@@ -170,6 +176,11 @@ export default function Users() {
                     <td>{user.name}</td>
                     <td>{user.idNumber}</td>
                     <td>{user.phone || '—'}</td>
+                    <td>
+                      {user.notificationDay
+                        ? `יום ${DAY_LABELS[user.notificationDay] || user.notificationDay}, ${user.notificationHour}:00`
+                        : <span className="muted">לא הוגדרה</span>}
+                    </td>
                     <td>
                       <span className={`badge ${user.isActive ? 'badge-success' : 'badge-danger'}`}>
                         {user.isActive ? 'פעילה' : 'לא פעילה'}

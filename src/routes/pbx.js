@@ -4,6 +4,7 @@ const { User, Activity, Completion, ActivityLog } = require('../models');
 const { validateIdNumber, getWeekStartDate, getWeekNumber, canUpdateActivityThisWeek, canUpdateCompletionThisMonth } = require('../utils/validators');
 const { speechCatalog } = require('../services/speech');
 const { PHRASES } = require('../utils/phrases');
+const { getParashaName } = require('../utils/hebrew-date');
 
 /**
  * Technoline PBX Extension "API" module — inbound call handler.
@@ -40,13 +41,22 @@ const REMINDER_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', '
 /** A pre-uploaded clip, referenced by name. Falls back to raw text (silent
  * today, but harmless) if the clip hasn't finished uploading yet. */
 function clip(phraseKey) {
-  const text = PHRASES[phraseKey];
+  return clipText(PHRASES[phraseKey]);
+}
+
+/** Same as `clip`, but for text that isn't in the fixed PHRASES catalog —
+ * e.g. this week's parasha name, which changes weekly. Fires off a
+ * background synthesis request when not yet ready, so it's likely to be
+ * ready by the next call even though this one falls back to silent text. */
+function clipText(text) {
   // Without extensionId, Technoline looks for the file in the extension
   // currently running (the API extension itself), not the dedicated audio
   // extension we actually uploaded it to.
-  return speechCatalog.isReady(text)
-    ? { fileName: speechCatalog.fileNameFor(text), extensionId: speechCatalog.extensionId }
-    : { text };
+  if (speechCatalog.isReady(text)) {
+    return { fileName: speechCatalog.fileNameFor(text), extensionId: speechCatalog.extensionId };
+  }
+  speechCatalog.ensure(text).catch(() => {});
+  return { text };
 }
 
 function numberItem(value) {
@@ -112,12 +122,8 @@ router.post('/technoline', handlePbxRequest);
  * whether audio playback works at all, independent of our call flow logic.
  */
 function testAnnouncement() {
-  const text = 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.';
-  const files = speechCatalog.isReady(text)
-    ? [{ fileName: speechCatalog.fileNameFor(text), extensionId: speechCatalog.extensionId }]
-    : [{ text }];
   return [
-    { type: 'simpleMessage', files },
+    { type: 'simpleMessage', files: [clipText('בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.')] },
     { type: 'hangup' },
   ];
 }
@@ -180,12 +186,12 @@ function confirmGate(name) {
 // ---- Extension 1: weekly activity update ----
 
 async function handleExtension1(user, params) {
-  const weekNumber = getWeekNumber();
+  const parasha = await getParashaName();
   const confirm1 = params[CONFIRM1_PARAM];
 
   if (!confirm1) {
     return [
-      { ...confirmGate(CONFIRM1_PARAM), files: [clip('confirmActivityPrefix'), numberItem(weekNumber), clip('confirmActivitySuffix')] },
+      { ...confirmGate(CONFIRM1_PARAM), files: [clip('confirmActivityPrefix'), clipText(parasha), clip('confirmActivitySuffix')] },
     ];
   }
 
@@ -193,12 +199,13 @@ async function handleExtension1(user, params) {
     return [simpleMessageModule('cancelled'), mainMenu()];
   }
 
-  return recordActivity(user);
+  return recordActivity(user, parasha);
 }
 
-async function recordActivity(user) {
+async function recordActivity(user, parasha) {
   const weekStart = getWeekStartDate();
   const weekNumber = getWeekNumber();
+  parasha = parasha || await getParashaName();
 
   if (user.lastActivityUpdate && !canUpdateActivityThisWeek(user.lastActivityUpdate)) {
     return simpleMessage('alreadyUpdatedThisWeek', { hangup: true });
@@ -208,6 +215,7 @@ async function recordActivity(user) {
     userId: user.id,
     weekStartDate: weekStart,
     weekNumber,
+    parashaName: parasha,
     participated: true,
     points: 10,
   });
@@ -219,13 +227,13 @@ async function recordActivity(user) {
     action: 'extension_1_activity_update',
     extension: 1,
     status: 'success',
-    details: { weekNumber, points: activity.points },
+    details: { weekNumber, parasha, points: activity.points },
   });
 
   return [
     {
       type: 'simpleMessage',
-      files: [clip('activityUpdatedPrefix'), numberItem(weekNumber), clip('activityUpdatedSuffix')],
+      files: [clip('activityUpdatedPrefix'), clipText(parasha), clip('activityUpdatedSuffix')],
     },
     { type: 'hangup' },
   ];

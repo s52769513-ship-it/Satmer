@@ -114,7 +114,8 @@ export default function Reports() {
         columns={[
           { key: 'name', label: 'שם' },
           { key: 'idNumber', label: 'ת.ז' },
-          { key: 'week', label: 'שבוע' },
+          { key: 'parasha', label: 'פרשה' },
+          { key: 'hebrewDate', label: 'תאריך עברי' },
           { key: 'participated', label: 'השתתפה', render: (r) => <span className={`badge ${r.participated ? 'badge-success' : 'badge-danger'}`}>{r.participated ? 'כן' : 'לא'}</span> },
           { key: 'points', label: 'נקודות' },
         ]}
@@ -153,7 +154,7 @@ export default function Reports() {
           { key: 'idNumber', label: 'ת.ז' },
           { key: 'completionNumber', label: 'מס\' השלמה' },
           { key: 'points', label: 'נקודות' },
-          { key: 'date', label: 'תאריך', render: (r) => new Date(r.date).toLocaleDateString('he-IL') },
+          { key: 'hebrewDate', label: 'תאריך עברי' },
         ]}
       >
         <div className="field">

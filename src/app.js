@@ -6,6 +6,7 @@ const db = require('./models');
 const setupSchedules = require('./services/scheduler');
 const { speechCatalog } = require('./services/speech');
 const { PHRASES } = require('./utils/phrases');
+const { getParashaName } = require('./utils/hebrew-date');
 const ensureAdmin = require('./utils/ensure-admin');
 
 const app = express();
@@ -95,8 +96,13 @@ const startServer = async () => {
     // Technoline so the phone line has real audio ready. Doesn't block
     // startup — a caller before this finishes just gets silence for a
     // still-unready prompt, same as before this existed.
-    speechCatalog.warm(PHRASES).then(({ ready, failed }) => {
+    speechCatalog.warm(PHRASES).then(async ({ ready, failed }) => {
       console.log(`🔊 Speech catalog warmed: ${ready} ready, ${failed} failed`);
+      // This week's parasha name changes weekly, so it isn't in the fixed
+      // PHRASES catalog — prepare it too, so the first caller of the week
+      // doesn't hit silence while it synthesizes on demand.
+      const parasha = await getParashaName();
+      if (parasha) await speechCatalog.ensure(parasha);
     }).catch((error) => {
       console.error('❌ Speech catalog warm-up failed:', error.message);
     });

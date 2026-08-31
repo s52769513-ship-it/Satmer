@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 
+const ACTION_LABELS = {
+  extension_1_activity_update: 'עדכון פעילות חסד',
+  extension_2_completion_update: 'עדכון השלמה',
+  extension_3_summary: 'שמיעת סיכום',
+  extension_4_reminder_setting: 'הגדרת תזכורת',
+};
+
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -54,21 +61,23 @@ export default function Dashboard() {
                 <th>פעולה</th>
                 <th>שלוחה</th>
                 <th>סטטוס</th>
-                <th>תאריך</th>
+                <th>תאריך עברי</th>
+                <th>שעה</th>
               </tr>
             </thead>
             <tbody>
               {logs.map((log) => (
                 <tr key={log.id}>
                   <td>{log.user?.name || '—'}</td>
-                  <td>{log.action}</td>
+                  <td>{ACTION_LABELS[log.action] || log.action}</td>
                   <td>{log.extension}</td>
                   <td>
                     <span className={`badge ${log.status === 'success' ? 'badge-success' : 'badge-danger'}`}>
                       {log.status === 'success' ? 'הצליח' : 'נכשל'}
                     </span>
                   </td>
-                  <td>{new Date(log.createdAt).toLocaleString('he-IL')}</td>
+                  <td>{log.hebrewDate}</td>
+                  <td>{new Date(log.createdAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td>
                 </tr>
               ))}
             </tbody>
