@@ -1,5 +1,13 @@
-const { createHash } = require('crypto');
+const { createHash, webcrypto } = require('crypto');
 const technoline = require('./technoline');
+
+// msedge-tts assumes the Web Crypto API is a global (stable without a flag
+// only from Node 19+). Railway currently runs Node 18, where `crypto` is
+// not global by default — polyfill it from Node's own crypto module rather
+// than bump the whole app's Node version for one dependency.
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto;
+}
 
 /**
  * Speech we make ourselves.
