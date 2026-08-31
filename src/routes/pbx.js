@@ -34,8 +34,11 @@ const MENU_PARAM = 'menuChoice';
  * today, but harmless) if the clip hasn't finished uploading yet. */
 function clip(phraseKey) {
   const text = PHRASES[phraseKey];
+  // Without extensionId, Technoline looks for the file in the extension
+  // currently running (the API extension itself), not the dedicated audio
+  // extension we actually uploaded it to.
   return speechCatalog.isReady(text)
-    ? { fileName: speechCatalog.fileNameFor(text) }
+    ? { fileName: speechCatalog.fileNameFor(text), extensionId: speechCatalog.extensionId }
     : { text };
 }
 
@@ -105,7 +108,7 @@ router.post('/technoline', handlePbxRequest);
 function testAnnouncement() {
   const text = 'בדיקה, אחת שתיים שלוש. אם אתם שומעים הודעה זו, המערכת פעילה.';
   const files = speechCatalog.isReady(text)
-    ? [{ fileName: speechCatalog.fileNameFor(text) }]
+    ? [{ fileName: speechCatalog.fileNameFor(text), extensionId: speechCatalog.extensionId }]
     : [{ text }];
   return [
     { type: 'simpleMessage', files },
