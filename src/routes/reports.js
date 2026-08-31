@@ -1,139 +1,179 @@
 const express = require('express');
 const router = express.Router();
+const { Op } = require('sequelize');
 const { Activity, Completion, User } = require('../models');
 const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
 
-// Download weekly report
-router.get('/weekly', authenticateToken, authorizeAdmin, async (req, res) => {
-  try {
-    const { week, year } = req.query;
-    const currentYear = year || new Date().getFullYear();
+// ---- shared row builders (used by both preview and CSV download) ----
 
-    const activities = await Activity.findAll({
-      where: { weekNumber: week, userId: { [require('sequelize').Op.any]: [] } },
-      include: [{ model: User, as: 'user', attributes: ['name', 'idNumber'] }],
-    });
-
-    // Generate CSV
-    const csv = generateActivityCSV(activities);
-
-    res.header('Content-Type', 'text/csv');
-    res.header('Content-Disposition', `attachment; filename="activities_week_${week}_${currentYear}.csv"`);
-    res.send(csv);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to generate report' });
+async function weeklyRows({ week, year, search, participated }) {
+  const where = {};
+  if (week) where.weekNumber = week;
+  if (year) {
+    const start = new Date(Number(year), 0, 1);
+    const end = new Date(Number(year) + 1, 0, 1);
+    where.weekStartDate = { [Op.gte]: start, [Op.lt]: end };
   }
-});
+  if (participated === 'yes') where.participated = true;
+  if (participated === 'no') where.participated = false;
 
-// Download monthly report
-router.get('/monthly', authenticateToken, authorizeAdmin, async (req, res) => {
-  try {
-    const { month, year } = req.query;
-    const currentYear = year || new Date().getFullYear();
-    const currentMonth = month || new Date().getMonth() + 1;
+  const userWhere = search ? { [Op.or]: [{ name: { [Op.iLike]: `%${search}%` } }, { idNumber: { [Op.iLike]: `%${search}%` } }] } : undefined;
 
-    const completions = await Completion.findAll({
-      where: { month: currentMonth, year: currentYear },
-      include: [{ model: User, as: 'user', attributes: ['name', 'idNumber'] }],
-      order: [['completedAt', 'ASC']],
-    });
+  const activities = await Activity.findAll({
+    where,
+    include: [{ model: User, as: 'user', attributes: ['name', 'idNumber'], where: userWhere }],
+    order: [[{ model: User, as: 'user' }, 'name', 'ASC']],
+  });
 
-    // Generate CSV
-    const csv = generateCompletionCSV(completions, currentMonth, currentYear);
-
-    res.header('Content-Type', 'text/csv');
-    res.header('Content-Disposition', `attachment; filename="completions_${currentMonth}_${currentYear}.csv"`);
-    res.send(csv);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to generate report' });
-  }
-});
-
-// Download yearly report
-router.get('/yearly', authenticateToken, authorizeAdmin, async (req, res) => {
-  try {
-    const { year } = req.query;
-    const currentYear = year || new Date().getFullYear();
-
-    const users = await User.findAll({
-      include: [
-        { model: Activity, as: 'activities', where: {} },
-        { model: Completion, as: 'completions', where: { year: currentYear } },
-      ],
-    });
-
-    // Generate comprehensive CSV
-    const csv = generateYearlyCSV(users, currentYear);
-
-    res.header('Content-Type', 'text/csv');
-    res.header('Content-Disposition', `attachment; filename="yearly_report_${currentYear}.csv"`);
-    res.send(csv);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to generate report' });
-  }
-});
-
-// Helper functions
-function generateActivityCSV(activities) {
-  const headers = ['Name', 'ID Number', 'Week', 'Parsha', 'Participated', 'Points'];
-  const rows = activities.map(a => [
-    a.user.name,
-    a.user.idNumber,
-    a.weekNumber,
-    a.parashaName || '',
-    a.participated ? 'Yes' : 'No',
-    a.points,
-  ]);
-
-  return generateCSV(headers, rows);
+  return activities.map(a => ({
+    name: a.user.name,
+    idNumber: a.user.idNumber,
+    week: a.weekNumber,
+    parasha: a.parashaName || '',
+    participated: a.participated,
+    points: a.points,
+  }));
 }
 
-function generateCompletionCSV(completions, month, year) {
-  const headers = ['Name', 'ID Number', 'Completion #', 'Month', 'Year', 'Points', 'Date'];
-  const rows = completions.map(c => [
-    c.user.name,
-    c.user.idNumber,
-    c.completionNumber,
-    month,
-    year,
-    c.points,
-    new Date(c.completedAt).toLocaleDateString('he-IL'),
-  ]);
+async function monthlyRows({ month, year, search }) {
+  const currentYear = year || new Date().getFullYear();
+  const currentMonth = month || new Date().getMonth() + 1;
 
-  return generateCSV(headers, rows);
+  const userWhere = search ? { [Op.or]: [{ name: { [Op.iLike]: `%${search}%` } }, { idNumber: { [Op.iLike]: `%${search}%` } }] } : undefined;
+
+  const completions = await Completion.findAll({
+    where: { month: currentMonth, year: currentYear },
+    include: [{ model: User, as: 'user', attributes: ['name', 'idNumber'], where: userWhere }],
+    order: [['completedAt', 'ASC']],
+  });
+
+  return completions.map(c => ({
+    name: c.user.name,
+    idNumber: c.user.idNumber,
+    completionNumber: c.completionNumber,
+    month: currentMonth,
+    year: currentYear,
+    points: c.points,
+    date: c.completedAt,
+  }));
 }
 
-function generateYearlyCSV(users, year) {
-  const headers = ['Name', 'ID Number', 'Total Activities', 'Participated', 'Activity Points', 'Completions', 'Completion Points', 'Total Points'];
+async function yearlyRows({ year, search, minPoints }) {
+  const currentYear = year || new Date().getFullYear();
+  const userWhere = search ? { [Op.or]: [{ name: { [Op.iLike]: `%${search}%` } }, { idNumber: { [Op.iLike]: `%${search}%` } }] } : {};
+
+  const users = await User.findAll({
+    where: userWhere,
+    include: [
+      { model: Activity, as: 'activities', required: false },
+      { model: Completion, as: 'completions', where: { year: currentYear }, required: false },
+    ],
+    order: [['name', 'ASC']],
+  });
 
   const rows = users.map(u => {
     const participated = u.activities.filter(a => a.participated).length;
     const activityPoints = u.activities.reduce((sum, a) => sum + (a.points || 0), 0);
     const completions = u.completions.length;
     const completionPoints = u.completions.reduce((sum, c) => sum + (c.points || 0), 0);
-    const totalPoints = activityPoints + completionPoints;
-
-    return [
-      u.name,
-      u.idNumber,
-      u.activities.length,
+    return {
+      name: u.name,
+      idNumber: u.idNumber,
+      totalActivities: u.activities.length,
       participated,
       activityPoints,
       completions,
       completionPoints,
-      totalPoints,
-    ];
+      totalPoints: activityPoints + completionPoints,
+    };
   });
 
-  return generateCSV(headers, rows);
+  return minPoints ? rows.filter(r => r.totalPoints >= Number(minPoints)) : rows;
+}
+
+// ---- preview endpoints (JSON, for the admin UI table) ----
+
+router.get('/weekly/preview', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    res.json(await weeklyRows(req.query));
+  } catch (error) {
+    console.error('Weekly preview error:', error);
+    res.status(500).json({ error: 'Failed to load preview' });
+  }
+});
+
+router.get('/monthly/preview', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    res.json(await monthlyRows(req.query));
+  } catch (error) {
+    console.error('Monthly preview error:', error);
+    res.status(500).json({ error: 'Failed to load preview' });
+  }
+});
+
+router.get('/yearly/preview', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    res.json(await yearlyRows(req.query));
+  } catch (error) {
+    console.error('Yearly preview error:', error);
+    res.status(500).json({ error: 'Failed to load preview' });
+  }
+});
+
+// ---- CSV download endpoints ----
+
+router.get('/weekly', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const rows = await weeklyRows(req.query);
+    const csv = generateCSV(
+      ['שם', 'תעודת זהות', 'שבוע', 'פרשה', 'השתתפה', 'נקודות'],
+      rows.map(r => [r.name, r.idNumber, r.week, r.parasha, r.participated ? 'כן' : 'לא', r.points])
+    );
+    sendCsv(res, csv, `activities_week_${req.query.week}_${req.query.year || new Date().getFullYear()}.csv`);
+  } catch (error) {
+    console.error('Weekly report error:', error);
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+
+router.get('/monthly', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const rows = await monthlyRows(req.query);
+    const csv = generateCSV(
+      ['שם', 'תעודת זהות', 'מס\' השלמה', 'חודש', 'שנה', 'נקודות', 'תאריך'],
+      rows.map(r => [r.name, r.idNumber, r.completionNumber, r.month, r.year, r.points, new Date(r.date).toLocaleDateString('he-IL')])
+    );
+    sendCsv(res, csv, `completions_${req.query.month}_${req.query.year || new Date().getFullYear()}.csv`);
+  } catch (error) {
+    console.error('Monthly report error:', error);
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+
+router.get('/yearly', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const rows = await yearlyRows(req.query);
+    const csv = generateCSV(
+      ['שם', 'תעודת זהות', 'סה"כ שבועות', 'השתתפויות', 'נקודות פעילות', 'השלמות', 'נקודות השלמה', 'סה"כ נקודות'],
+      rows.map(r => [r.name, r.idNumber, r.totalActivities, r.participated, r.activityPoints, r.completions, r.completionPoints, r.totalPoints])
+    );
+    sendCsv(res, csv, `yearly_report_${req.query.year || new Date().getFullYear()}.csv`);
+  } catch (error) {
+    console.error('Yearly report error:', error);
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+
+function sendCsv(res, csv, filename) {
+  // BOM so Excel opens Hebrew UTF-8 correctly instead of mangling it.
+  res.header('Content-Type', 'text/csv; charset=utf-8');
+  res.header('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send('﻿' + csv);
 }
 
 function generateCSV(headers, rows) {
   const csvHeaders = headers.map(h => `"${h}"`).join(',');
-  const csvRows = rows.map(row =>
-    row.map(cell => `"${cell}"`).join(',')
-  ).join('\n');
-
+  const csvRows = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
   return `${csvHeaders}\n${csvRows}`;
 }
 

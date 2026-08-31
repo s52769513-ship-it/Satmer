@@ -27,7 +27,12 @@ export default function Messages() {
 
   return (
     <div>
-      <h2>שליחת הודעות (צינתוק)</h2>
+      <div className="page-header">
+        <div>
+          <h2>שליחת הודעות</h2>
+          <p>שיחת צינתוק קולית לכל התלמידות הפעילות</p>
+        </div>
+      </div>
       <div className="card">
         <p className="muted">
           ההודעה תישלח כשיחה קולית לכל התלמידות הפעילות במערכת, דרך המערכת הטלפונית של טכנוליין בלבד.
@@ -35,20 +40,14 @@ export default function Messages() {
         <form onSubmit={send}>
           <div className="field">
             <label>תוכן ההודעה</label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={4}
-              required
-              style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
-            />
+            <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} required />
           </div>
           <button className="btn-primary" disabled={sending}>
-            {sending ? 'שולחת...' : 'שליחת צינתוק לכולן'}
+            {sending && <span className="spinner" />}{sending ? 'שולחת...' : '📞 שליחת צינתוק לכולן'}
           </button>
         </form>
         {error && <p className="error-text">{error}</p>}
-        {result && <p className="success-text">נשלח בהצלחה ל-{result.sentTo} תלמידות</p>}
+        {result && <p className="success-text">✓ נשלח בהצלחה ל-{result.sentTo} תלמידות</p>}
       </div>
     </div>
   );

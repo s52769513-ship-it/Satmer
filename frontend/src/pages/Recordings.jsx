@@ -49,22 +49,26 @@ export default function Recordings() {
 
   return (
     <div>
-      <h2>ניהול הקלטות</h2>
-      <p className="muted">כל ההקלטות הקוליות של המערכת (הודעות פתיחה, הודעות מותאמות אישית וכו').</p>
+      <div className="page-header">
+        <div>
+          <h2>ניהול הקלטות</h2>
+          <p>כל ההקלטות הקוליות של המערכת (הודעות פתיחה, הודעות מותאמות אישית וכו')</p>
+        </div>
+      </div>
 
       <div className="card">
-        <h2>העלאת הקלטה חדשה</h2>
-        <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleUpload} disabled={uploading} />
-        {uploading && <p className="muted">מעלה...</p>}
+        <h2>🎙️ העלאת הקלטה חדשה</h2>
+        <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleUpload} disabled={uploading} style={{ width: 'auto' }} />
+        {uploading && <p className="muted"><span className="spinner" />מעלה...</p>}
       </div>
 
       <div className="card">
         <h2>קבצים קיימים ({files.length})</h2>
         {error && <p className="error-text">{error}</p>}
         {loading ? (
-          <p className="muted">טוענת...</p>
+          <p className="muted"><span className="spinner" />טוענת...</p>
         ) : files.length === 0 ? (
-          <p className="muted">אין הקלטות עדיין</p>
+          <div className="empty-state">אין הקלטות עדיין</div>
         ) : (
           <table>
             <thead>

@@ -32,6 +32,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <form className="login-box" onSubmit={submit}>
+        <div className="icon">💜</div>
         <h2>כניסת מנהלת</h2>
         <div className="field">
           <label>תעודת זהות</label>

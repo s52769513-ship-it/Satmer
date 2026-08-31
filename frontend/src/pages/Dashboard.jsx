@@ -13,7 +13,12 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h2>לוח בקרה</h2>
+      <div className="page-header">
+        <div>
+          <h2>לוח בקרה</h2>
+          <p>סקירה כללית של המערכת</p>
+        </div>
+      </div>
       {error && <p className="error-text">{error}</p>}
 
       {stats && (
@@ -38,9 +43,9 @@ export default function Dashboard() {
       )}
 
       <div className="card">
-        <h2>פעילות אחרונה בקו (7 ימים)</h2>
+        <h2>📞 פעילות אחרונה בקו (7 ימים)</h2>
         {logs.length === 0 ? (
-          <p className="muted">אין פעילות להצגה</p>
+          <div className="empty-state">אין פעילות להצגה</div>
         ) : (
           <table>
             <thead>

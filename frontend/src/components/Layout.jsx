@@ -1,11 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 
 const NAV_ITEMS = [
-  { to: '/', label: 'לוח בקרה', end: true },
-  { to: '/users', label: 'ניהול משתמשות' },
-  { to: '/reports', label: 'דוחות והורדות' },
-  { to: '/recordings', label: 'ניהול הקלטות' },
-  { to: '/messages', label: 'שליחת הודעות' },
+  { to: '/', label: 'לוח בקרה', icon: '📊', end: true },
+  { to: '/users', label: 'ניהול משתמשות', icon: '👥' },
+  { to: '/reports', label: 'דוחות והורדות', icon: '📄' },
+  { to: '/recordings', label: 'ניהול הקלטות', icon: '🎙️' },
+  { to: '/messages', label: 'שליחת הודעות', icon: '📞' },
 ];
 
 export default function Layout({ children }) {
@@ -21,17 +21,20 @@ export default function Layout({ children }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <h1>מערכת פעילות חסד</h1>
+        <div className="brand">
+          <div className="icon">💜</div>
+          <h1>מערכת פעילות חסד</h1>
+        </div>
         <nav>
           {NAV_ITEMS.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end}>
-              {item.label}
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
             </NavLink>
           ))}
         </nav>
-        <div className="muted" style={{ color: 'rgba(255,255,255,0.6)', marginTop: 24, fontSize: 12 }}>
-          {user?.name}
-        </div>
+        <div className="spacer" />
+        <div className="user-info">מחוברת כ־{user?.name}</div>
         <button className="logout-btn" onClick={logout}>התנתקות</button>
       </aside>
       <main className="main-content">{children}</main>
