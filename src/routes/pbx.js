@@ -68,9 +68,28 @@ function numberItem(value) {
   return { number: String(value) };
 }
 
+/**
+ * Technoline accumulates every `name` value for the life of the api
+ * extension and re-sends all of them on every request - including, it
+ * turns out, more than one value for the same name if the caller revisits
+ * a menu that produces it again (e.g. back to the main menu, then a
+ * different choice). Express then parses that repeated query key as an
+ * array instead of a string, which broke every `=== '1'` / `.trim()`
+ * comparison in this file. Normalize to the most recent value for each
+ * param right after parsing so the rest of the handler can keep treating
+ * everything as a plain string.
+ */
+function normalizeParams(raw) {
+  const params = {};
+  for (const [key, value] of Object.entries(raw)) {
+    params[key] = Array.isArray(value) ? value[value.length - 1] : value;
+  }
+  return params;
+}
+
 async function handlePbxRequest(req, res) {
   try {
-    const params = { ...req.query, ...req.body };
+    const params = normalizeParams({ ...req.query, ...req.body });
     // Per Technoline's Module API docs: the final HANGUP notification must
     // get an empty 200, never a module — the caller is already gone, and
     // returning one "may produce errors on the PBX side". Short-circuit
