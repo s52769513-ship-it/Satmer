@@ -13,7 +13,17 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  const start = Date.now();
+  const query = { ...req.query };
+  if (query.token) query.token = '***';
+  console.log(`[${new Date().toISOString()}] --> ${req.method} ${req.path} query=${JSON.stringify(query)}`);
+
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    console.log(`[${new Date().toISOString()}] <-- ${req.method} ${req.path} ${res.statusCode} (${Date.now() - start}ms) body=${JSON.stringify(body)}`);
+    return originalJson(body);
+  };
+
   next();
 });
 
