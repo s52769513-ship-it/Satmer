@@ -42,8 +42,8 @@ module.exports = (sequelize, DataTypes) => {
     tableName: 'user_notifications',
     underscored: true,
     indexes: [
-      { fields: ['userId', 'isRead'] },
-      { fields: ['createdAt'] },
+      { fields: ['user_id', 'is_read'] },
+      { fields: ['created_at'] },
     ],
   });
 

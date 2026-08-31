@@ -1,132 +1,125 @@
 const axios = require('axios');
 
+/**
+ * Technoline Campaign API client — used exclusively to place outbound
+ * voice calls (צינתוקים) to users. No SMS/email/other channel.
+ * Docs: campaignApi.php
+ */
 class NotificationService {
   constructor() {
     this.apiKey = process.env.TECHNOLINE_API_KEY;
-    this.apiUrl = process.env.TECHNOLINE_API_URL || 'https://api.ipsales.co.il/api';
+    this.baseUrl = process.env.TECHNOLINE_CAMPAIGN_API_URL || 'https://app.ipsales.co.il/campaignApi.php';
   }
 
-  // Send voice notification via Technoline phone system
-  async sendVoiceNotification(phoneNumber, message, language = 'he') {
-    try {
-      console.log(`📞 Sending voice notification to ${phoneNumber}`);
+  async _run(payload) {
+    const response = await axios.post(this.baseUrl, {
+      action: 'campaignRun',
+      apiKey: this.apiKey,
+      ...payload,
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return response.data;
+  }
 
-      const response = await axios.post(
-        `${this.apiUrl}/calls/voice-notification`,
-        {
-          to: phoneNumber,
-          message,
-          language,
-          priority: 'high',
-          retry: 3,
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+  /**
+   * Normalize to Israeli local format (leading 0), as required by campaignRun.
+   */
+  _normalizePhone(phone) {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('972')) return '0' + digits.slice(3);
+    if (digits.startsWith('0')) return digits;
+    return '0' + digits;
+  }
 
-      console.log(`✅ Voice notification sent to ${phoneNumber}`);
-      return response.data;
-    } catch (error) {
-      console.error(`❌ Failed to send voice notification to ${phoneNumber}:`, error.message);
-      throw error;
+  /**
+   * Place a single outbound voice call reading `message` via TTS.
+   */
+  async sendVoiceNotification(phoneNumber, message, { title } = {}) {
+    const phone = this._normalizePhone(phoneNumber);
+
+    const result = await this._run({
+      audioText: message,
+      phones: [phone],
+      title: title || 'Satmer Chesed Notification',
+      callLength: 25,
+      dialRetries: 2,
+      betweenRetries: 20,
+      reasonableHours: 'yes',
+    });
+
+    if (result.errorCode && result.errorCode !== 0) {
+      throw new Error(`Technoline campaignRun failed: errorCode=${result.errorCode} ${result.note || ''}`);
     }
+
+    return result;
   }
 
-  // Send IVR message (through phone system)
-  async sendIVRMessage(phoneNumber, extensionNumber, message) {
-    try {
-      console.log(`📞 Sending IVR message to ${phoneNumber} - Extension ${extensionNumber}`);
-
-      const response = await axios.post(
-        `${this.apiUrl}/ivr/send-message`,
-        {
-          phoneNumber,
-          extensionNumber,
-          message,
-          language: 'he',
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      console.log(`✅ IVR message sent to ${phoneNumber}`);
-      return response.data;
-    } catch (error) {
-      console.error(`❌ Failed to send IVR message:`, error.message);
-      throw error;
-    }
-  }
-
-  // Send weekly reminder via voice call
   async sendWeeklyReminder(user) {
-    try {
-      if (!user.phone) {
-        console.warn(`⚠️ User ${user.name} has no phone number`);
-        return null;
-      }
-
-      const message = `שלום ${user.name}! זה זמן לעדכן את פעילות החסד שלך לשבוע זה. לחצי 1 בהרחבה 1 כדי לעדכן.`;
-
-      return await this.sendVoiceNotification(user.phone, message, 'he');
-    } catch (error) {
-      console.error(`Failed to send reminder to ${user.name}:`, error.message);
-      throw error;
+    if (!user.phone) {
+      console.warn(`⚠️ User ${user.name} has no phone number`);
+      return null;
     }
+
+    const message = `שלום ${user.name}, זה זמן לעדכן את פעילות החסד שלך לשבוע זה. התקשרי למספר המערכת ולחצי 1 כדי לעדכן.`;
+
+    return this.sendVoiceNotification(user.phone, message, { title: `תזכורת שבועית - ${user.name}` });
   }
 
-  // Send achievement notification via voice
   async sendAchievementNotification(user, achievement) {
-    try {
-      if (!user.phone) {
-        console.warn(`⚠️ User ${user.name} has no phone number`);
-        return null;
-      }
-
-      const message = `כל הכבוד ${user.name}! ניצחנו ${achievement}. מזל טוב!`;
-
-      return await this.sendVoiceNotification(user.phone, message, 'he');
-    } catch (error) {
-      console.error(`Failed to send achievement notification:`, error.message);
-      throw error;
+    if (!user.phone) {
+      console.warn(`⚠️ User ${user.name} has no phone number`);
+      return null;
     }
+
+    const message = `כל הכבוד ${user.name}! ${achievement}. מזל טוב!`;
+
+    return this.sendVoiceNotification(user.phone, message, { title: `הישג - ${user.name}` });
   }
 
-  // Send admin broadcast message to all users
+  /**
+   * Broadcast the same message to every active user with a phone number,
+   * in a single campaign call (one campaignRun for the whole batch).
+   */
   async sendBroadcastMessage(users, message) {
-    const results = {};
+    const phones = users
+      .filter(u => u.isActive && u.phone)
+      .map(u => this._normalizePhone(u.phone));
 
-    for (const user of users) {
-      if (!user.phone || !user.isActive) {
-        continue;
-      }
-
-      try {
-        results[user.id] = await this.sendVoiceNotification(user.phone, message, 'he');
-      } catch (error) {
-        results[user.id] = { error: error.message };
-      }
+    if (phones.length === 0) {
+      return { errorCode: 0, phones: 0, note: 'No eligible recipients' };
     }
 
-    return results;
+    const result = await this._run({
+      audioText: message,
+      phones,
+      title: 'Satmer Admin Broadcast',
+      callLength: 25,
+      dialRetries: 2,
+      betweenRetries: 20,
+      reasonableHours: 'yes',
+    });
+
+    if (result.errorCode && result.errorCode !== 0) {
+      throw new Error(`Technoline campaignRun failed: errorCode=${result.errorCode} ${result.note || ''}`);
+    }
+
+    return result;
   }
 
-  // Send weekly reminders to all users with scheduled notification time
+  /**
+   * Send each user's individually-scheduled weekly reminder as one call each
+   * (message content is per-user, so they cannot be batched into one campaign).
+   */
   async sendWeeklyReminders(users) {
-    console.log(`📞 Sending weekly reminders to ${users.length} users...`);
+    console.log(`📞 Sending weekly voice reminders to ${users.length} users...`);
     const results = {};
 
     for (const user of users) {
       try {
         results[user.id] = await this.sendWeeklyReminder(user);
       } catch (error) {
+        console.error(`Failed to send reminder to ${user.name}:`, error.message);
         results[user.id] = { error: error.message };
       }
     }

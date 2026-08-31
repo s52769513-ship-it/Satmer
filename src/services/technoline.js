@@ -1,153 +1,149 @@
 const axios = require('axios');
 
-class TechnolineService {
+/**
+ * Technoline IVR Extensions Management API client.
+ * Docs: ivrFilesApi.php — manages the phone tree (extensions), audio files,
+ * per-extension security rules and system message overrides.
+ */
+class TechnolineIvrService {
   constructor() {
     this.apiKey = process.env.TECHNOLINE_API_KEY;
-    this.apiUrl = process.env.TECHNOLINE_API_URL || 'https://api.ipsales.co.il/api';
-    this.client = axios.create({
-      baseURL: this.apiUrl,
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
+    this.baseUrl = process.env.TECHNOLINE_IVR_API_URL || 'https://app.tlivr.com/ivrFilesApi.php';
+  }
+
+  async _get(action, params = {}) {
+    const response = await axios.get(this.baseUrl, {
+      params: { action, apiKey: this.apiKey, ...params },
     });
+    return response.data;
   }
 
-  // Setup IVR extensions
-  async setupExtensions() {
-    try {
-      // שלוחה 1: עדכון פעילות שבועי
-      const ext1 = await this.setupExtension({
-        extensionNumber: 1,
-        name: 'עדכון פעילות חסד שבועי',
-        greeting: 'ברוכים הבאים למערכת עדכון פעילות החסד. לחצי 1 כדי לעדכן את פעילותך השבועית.',
-        actions: [
-          { digit: '1', action: 'UPDATE_ACTIVITY', url: `${process.env.APP_URL}/api/ivr/extension-1/status` },
-          { digit: '#', action: 'CONFIRM', url: `${process.env.APP_URL}/api/ivr/extension-1/confirm` },
-        ],
+  async _post(action, data = {}, params = {}) {
+    const response = await axios.post(
+      this.baseUrl,
+      new URLSearchParams(data).toString(),
+      {
+        params: { action, apiKey: this.apiKey, ...params },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }
+    );
+    return response.data;
+  }
+
+  // ---- Schema / bootstrap ----
+
+  getUiSchema() {
+    return this._get('getUiSchema');
+  }
+
+  getAccountSettings() {
+    return this._get('getAccountSettings');
+  }
+
+  getExtensionPath(extensionId) {
+    return this._get('getExtensionPath', { extensionId });
+  }
+
+  // ---- Tree ----
+
+  foldersList() {
+    return this._get('foldersList');
+  }
+
+  folderSettings(extensionId) {
+    return this._get('folderSettings', { extensionId });
+  }
+
+  /**
+   * Create (extensionId='NEW' + belowExtension) or update an extension.
+   * settings is a flat object merged into settings[key]=value form fields.
+   */
+  extensionSet({ extensionId, belowExtension, type, name, extension, settings = {} }) {
+    const data = { type };
+    if (name !== undefined) data.name = name;
+    if (extension !== undefined) data.extension = extension;
+    if (belowExtension !== undefined) data.belowExtension = belowExtension;
+
+    Object.entries(settings).forEach(([key, value]) => {
+      data[`settings[${key}]`] = value;
+    });
+
+    return this._post('extensionSet', data, { extensionId: extensionId || 'NEW' });
+  }
+
+  folderDelete(extensionId) {
+    return this._get('folderDelete', { extensionId });
+  }
+
+  /**
+   * rules: array of { securityType, ...fields }, saved in order as S1, S2, ...
+   */
+  securitySet(extensionId, rules = []) {
+    const data = {};
+    rules.forEach((rule, i) => {
+      const n = i + 1;
+      Object.entries(rule).forEach(([key, value]) => {
+        data[`S${n}[${key}]`] = value;
       });
-
-      // שלוחה 2: עדכון השלמות
-      const ext2 = await this.setupExtension({
-        extensionNumber: 2,
-        name: 'עדכון השלמות',
-        greeting: 'אתם בהרחבה לעדכון השלמות. לחצי 1 כדי לרשום השלמה חדשה.',
-        actions: [
-          { digit: '1', action: 'UPDATE_COMPLETION', url: `${process.env.APP_URL}/api/ivr/extension-2/status` },
-          { digit: '#', action: 'CONFIRM', url: `${process.env.APP_URL}/api/ivr/extension-2/confirm` },
-        ],
-      });
-
-      // שלוחה 3: צפייה בסיכום ההישגים
-      const ext3 = await this.setupExtension({
-        extensionNumber: 3,
-        name: 'סיכום ההישגים',
-        greeting: 'כעת תוכלי לשמוע את סיכום ההישגים שלך.',
-        actions: [
-          { digit: '1', action: 'SUMMARY', url: `${process.env.APP_URL}/api/ivr/extension-3/summary` },
-        ],
-      });
-
-      return { ext1, ext2, ext3 };
-    } catch (error) {
-      console.error('Failed to setup extensions:', error);
-      throw error;
-    }
+    });
+    return this._post('securitySet', data, { extensionId });
   }
 
-  // Setup single extension
-  async setupExtension(config) {
-    try {
-      const response = await this.client.post('/ivr/extensions', {
-        ...config,
-        pbxId: process.env.TECHNOLINE_PBX_ID,
-      });
-      return response.data;
-    } catch (error) {
-      console.error(`Failed to setup extension ${config.extensionNumber}:`, error);
-      throw error;
-    }
+  // ---- Files ----
+
+  filesList(extensionId) {
+    return this._get('filesList', { extensionId });
   }
 
-  // Handle incoming call
-  async handleIncomingCall(callData) {
-    try {
-      const { callerId, extensionNumber, timestamp } = callData;
+  /**
+   * Upload one audio file (<=10MB) to an extension.
+   * fileBuffer: Buffer, fileName: string
+   */
+  async uploadFile(extensionId, fileBuffer, fileName, { name, checkDuplicate } = {}) {
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', fileBuffer, fileName);
+    if (name) form.append('name', name);
+    if (checkDuplicate) form.append('checkDuplicate', checkDuplicate);
 
-      // Verify caller and authenticate
-      const userToken = await this.authenticateByPhoneNumber(callerId);
-
-      return {
-        success: true,
-        token: userToken,
-        extension: extensionNumber,
-      };
-    } catch (error) {
-      console.error('Failed to handle incoming call:', error);
-      throw error;
-    }
+    const response = await axios.post(this.baseUrl, form, {
+      params: { action: 'uploadFile', apiKey: this.apiKey, extensionId },
+      headers: form.getHeaders(),
+    });
+    return response.data;
   }
 
-  // Authenticate using phone number
-  async authenticateByPhoneNumber(phoneNumber) {
-    // This would connect to our authentication system
-    // For now, a placeholder
-    return null;
+  fileDelete(fileId, belowExtension) {
+    return this._get('fileDelete', { fileId, belowExtension });
   }
 
-  // Send voice message
-  async sendVoiceMessage(userId, message, language = 'he') {
-    try {
-      const response = await this.client.post('/ivr/voice-message', {
-        userId,
-        message,
-        language,
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to send voice message:', error);
-      throw error;
-    }
+  fileRename(fileId, newName, belowExtension) {
+    return this._get('fileRename', { fileId, newName, belowExtension });
   }
 
-  // Record call
-  async recordCall(callId, recordingUrl) {
-    try {
-      const response = await this.client.post(`/calls/${callId}/record`, {
-        recordingUrl,
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to record call:', error);
-      throw error;
-    }
+  // ---- Dropdowns ----
+
+  getOptions2(list) {
+    return this._get('getOptions2', { list: Array.isArray(list) ? list.join(',') : list });
   }
 
-  // Get call details
-  async getCallDetails(callId) {
-    try {
-      const response = await this.client.get(`/calls/${callId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to get call details:', error);
-      throw error;
-    }
+  // ---- System messages ----
+
+  systemMessagesList(extensionId) {
+    return this._get('systemMessagesList', { extensionId });
   }
 
-  // Send SMS/Message
-  async sendMessage(userId, message) {
-    try {
-      const response = await this.client.post('/messages/send', {
-        userId,
-        message,
-        type: 'sms',
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      throw error;
-    }
+  async saveCustomMessagesBeta(code, extensionId, messages) {
+    const response = await axios.post(
+      this.baseUrl,
+      { code, extensionId, messages },
+      {
+        params: { action: 'saveCustomMessagesBeta', apiKey: this.apiKey },
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+    return response.data;
   }
 }
 
-module.exports = new TechnolineService();
+module.exports = new TechnolineIvrService();

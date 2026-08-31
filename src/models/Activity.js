@@ -56,8 +56,8 @@ module.exports = (sequelize, DataTypes) => {
     tableName: 'activities',
     underscored: true,
     indexes: [
-      { fields: ['userId', 'weekStartDate'], unique: true },
-      { fields: ['weekNumber'] },
+      { fields: ['user_id', 'week_start_date'], unique: true },
+      { fields: ['week_number'] },
     ],
   });
 

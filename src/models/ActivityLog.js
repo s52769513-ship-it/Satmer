@@ -54,7 +54,7 @@ module.exports = (sequelize, DataTypes) => {
     tableName: 'activity_logs',
     underscored: true,
     indexes: [
-      { fields: ['userId', 'createdAt'] },
+      { fields: ['user_id', 'created_at'] },
       { fields: ['action'] },
       { fields: ['extension'] },
     ],

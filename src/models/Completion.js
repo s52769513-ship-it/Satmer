@@ -58,8 +58,8 @@ module.exports = (sequelize, DataTypes) => {
     tableName: 'completions',
     underscored: true,
     indexes: [
-      { fields: ['userId', 'year', 'month'] },
-      { fields: ['userId', 'completionNumber'] },
+      { fields: ['user_id', 'year', 'month'] },
+      { fields: ['user_id', 'completion_number'] },
     ],
   });
 
