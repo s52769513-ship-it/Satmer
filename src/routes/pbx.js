@@ -24,6 +24,14 @@ const MENU_PARAM = 'menuChoice';
 async function handlePbxRequest(req, res) {
   try {
     const params = { ...req.query, ...req.body };
+    // Per Technoline's Module API docs: the final HANGUP notification must
+    // get an empty 200, never a module — the caller is already gone, and
+    // returning one "may produce errors on the PBX side". Short-circuit
+    // before any auth/lookup logic runs.
+    if (params.PBXcallStatus === 'HANGUP') {
+      return res.status(200).end();
+    }
+
     const token = process.env.TECHNOLINE_PBX_TOKEN;
     if (token && params.token !== token) {
       return res.json(simpleMessage('שגיאת הזדהות. אנא פני למנהלת המערכת.'));
@@ -77,8 +85,13 @@ function testAnnouncement() {
     { type: 'hangup' },
   ];
 }
-router.get('/technoline-test', (req, res) => res.json(testAnnouncement()));
-router.post('/technoline-test', (req, res) => res.json(testAnnouncement()));
+function handleTestRequest(req, res) {
+  const params = { ...req.query, ...req.body };
+  if (params.PBXcallStatus === 'HANGUP') return res.status(200).end();
+  res.json(testAnnouncement());
+}
+router.get('/technoline-test', handleTestRequest);
+router.post('/technoline-test', handleTestRequest);
 
 // ---- module builders ----
 
