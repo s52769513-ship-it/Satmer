@@ -81,7 +81,7 @@ function ReportSection({ title, description, children, previewUrl, params, downl
 
 function WeeklyReport() {
   const [parashot, setParashot] = useState([]);
-  const [currentYear, setCurrentYear] = useState('');
+  const [years, setYears] = useState([]);
   const [parasha, setParasha] = useState('');
   const [hebrewYear, setHebrewYear] = useState('');
   const [participated, setParticipated] = useState('all');
@@ -90,7 +90,7 @@ function WeeklyReport() {
   useEffect(() => {
     api.get('/reports/filter-options/weekly').then((res) => {
       setParashot(res.data.parashot);
-      setCurrentYear(res.data.currentHebrewYear);
+      setYears(res.data.years);
       setHebrewYear(res.data.currentHebrewYear);
     });
   }, []);
@@ -107,6 +107,7 @@ function WeeklyReport() {
         { key: 'name', label: 'שם' },
         { key: 'idNumber', label: 'ת.ז' },
         { key: 'parasha', label: 'פרשה' },
+        { key: 'hebrewYearLabel', label: 'שנה עברית' },
         { key: 'hebrewDate', label: 'תאריך עברי' },
         { key: 'participated', label: 'השתתפה', render: (r) => <span className={`badge ${r.participated ? 'badge-success' : 'badge-danger'}`}>{r.participated ? 'כן' : 'לא'}</span> },
         { key: 'points', label: 'נקודות' },
@@ -121,7 +122,9 @@ function WeeklyReport() {
       </div>
       <div className="field">
         <label>שנה עברית</label>
-        <input type="number" value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)} placeholder={String(currentYear)} />
+        <select value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)}>
+          {years.map((y) => <option key={y.value} value={y.value}>{y.label}</option>)}
+        </select>
       </div>
       <div className="field">
         <label>השתתפות</label>
@@ -141,7 +144,7 @@ function WeeklyReport() {
 
 function MonthlyReport() {
   const [months, setMonths] = useState([]);
-  const [currentYear, setCurrentYear] = useState('');
+  const [years, setYears] = useState([]);
   const [hebrewMonth, setHebrewMonth] = useState('');
   const [hebrewYear, setHebrewYear] = useState('');
   const [search, setSearch] = useState('');
@@ -149,7 +152,7 @@ function MonthlyReport() {
   useEffect(() => {
     api.get('/reports/filter-options/monthly', { params: { hebrewYear: hebrewYear || undefined } }).then((res) => {
       setMonths(res.data.months);
-      setCurrentYear(res.data.currentHebrewYear);
+      setYears(res.data.years);
       if (!hebrewYear) setHebrewYear(res.data.currentHebrewYear);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,6 +170,7 @@ function MonthlyReport() {
         { key: 'name', label: 'שם' },
         { key: 'idNumber', label: 'ת.ז' },
         { key: 'completionNumber', label: 'מס\' השלמה' },
+        { key: 'hebrewYearLabel', label: 'שנה עברית' },
         { key: 'points', label: 'נקודות' },
         { key: 'hebrewDate', label: 'תאריך עברי' },
       ]}
@@ -180,7 +184,9 @@ function MonthlyReport() {
       </div>
       <div className="field">
         <label>שנה עברית</label>
-        <input type="number" value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)} placeholder={String(currentYear)} />
+        <select value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)}>
+          {years.map((y) => <option key={y.value} value={y.value}>{y.label}</option>)}
+        </select>
       </div>
       <div className="field">
         <label>חיפוש שם/ת.ז</label>
@@ -191,14 +197,14 @@ function MonthlyReport() {
 }
 
 function YearlyReport() {
-  const [currentYear, setCurrentYear] = useState('');
+  const [years, setYears] = useState([]);
   const [hebrewYear, setHebrewYear] = useState('');
   const [search, setSearch] = useState('');
   const [minPoints, setMinPoints] = useState('');
 
   useEffect(() => {
     api.get('/reports/filter-options/yearly').then((res) => {
-      setCurrentYear(res.data.currentHebrewYear);
+      setYears(res.data.years);
       setHebrewYear(res.data.currentHebrewYear);
     });
   }, []);
@@ -209,7 +215,7 @@ function YearlyReport() {
       description="סיכום נקודות שנתי לכל תלמידה"
       previewUrl="/reports/yearly/preview"
       downloadUrl="/reports/yearly"
-      downloadFilename={`yearly_report_${hebrewYear || currentYear}.csv`}
+      downloadFilename={`yearly_report_${hebrewYear || ''}.csv`}
       params={{ hebrewYear: hebrewYear || undefined, search: search || undefined, minPoints: minPoints || undefined }}
       columns={[
         { key: 'name', label: 'שם' },
@@ -221,7 +227,9 @@ function YearlyReport() {
     >
       <div className="field">
         <label>שנה עברית</label>
-        <input type="number" value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)} placeholder={String(currentYear)} />
+        <select value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)}>
+          {years.map((y) => <option key={y.value} value={y.value}>{y.label}</option>)}
+        </select>
       </div>
       <div className="field">
         <label>חיפוש שם/ת.ז</label>

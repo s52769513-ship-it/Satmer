@@ -63,6 +63,12 @@ async function getHebrewYear(date = new Date()) {
   return new HDate(date).getFullYear();
 }
 
+/** Numeric Hebrew year (e.g. 5786) as customary letters, e.g. "תשפ״ו". */
+async function hebrewYearLetters(year) {
+  const { gematriya } = await import('@hebcal/core');
+  return stripNikud(gematriya(year));
+}
+
 /** Every month name for `hebrewYear` in calendar order (Tishrei first), for a dropdown. */
 async function listHebrewMonths(hebrewYear) {
   const { HDate } = await import('@hebcal/core');
@@ -84,6 +90,7 @@ module.exports = {
   getHebrewDayName,
   getHebrewMonthName,
   getHebrewYear,
+  hebrewYearLetters,
   listHebrewMonths,
   stripNikud,
 };

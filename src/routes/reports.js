@@ -3,7 +3,13 @@ const router = express.Router();
 const { Op } = require('sequelize');
 const { Activity, Completion, User } = require('../models');
 const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
-const { getHebrewDateString, getHebrewYear, listHebrewMonths } = require('../utils/hebrew-date');
+const { getHebrewDateString, getHebrewYear, hebrewYearLetters, listHebrewMonths } = require('../utils/hebrew-date');
+
+/** {value, label} pairs for a dropdown of Hebrew years, letters as the label. */
+async function yearOptions(numericYears) {
+  const unique = [...new Set(numericYears)].sort((a, b) => b - a);
+  return Promise.all(unique.map(async (value) => ({ value, label: await hebrewYearLetters(value) })));
+}
 
 // ---- shared row builders (used by both preview and CSV download) ----
 //
@@ -32,6 +38,7 @@ async function weeklyRows({ parasha, hebrewYear, search, participated }) {
     idNumber: a.user.idNumber,
     parasha: a.parashaName || '',
     hebrewYear: a.hebrewYear,
+    hebrewYearLabel: a.hebrewYear ? await hebrewYearLetters(a.hebrewYear) : '',
     hebrewDate: await getHebrewDateString(a.weekStartDate),
     participated: a.participated,
     points: a.points,
@@ -57,6 +64,7 @@ async function monthlyRows({ hebrewMonth, hebrewYear, search }) {
     completionNumber: c.completionNumber,
     hebrewMonth: c.hebrewMonth,
     hebrewYear: c.hebrewYear,
+    hebrewYearLabel: c.hebrewYear ? await hebrewYearLetters(c.hebrewYear) : '',
     points: c.points,
     date: c.completedAt,
     hebrewDate: await getHebrewDateString(c.completedAt),
@@ -102,13 +110,13 @@ async function yearlyRows({ hebrewYear, search, minPoints }) {
 // current Hebrew year (for the year filter alongside it).
 router.get('/filter-options/weekly', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
-    const rows = await Activity.findAll({
-      attributes: ['parashaName'],
-      where: { parashaName: { [Op.ne]: null } },
-      group: ['parashaName'],
-      raw: true,
-    });
-    res.json({ parashot: rows.map(r => r.parashaName).sort(), currentHebrewYear: await getHebrewYear() });
+    const [parashaRows, yearRows, currentHebrewYear] = await Promise.all([
+      Activity.findAll({ attributes: ['parashaName'], where: { parashaName: { [Op.ne]: null } }, group: ['parashaName'], raw: true }),
+      Activity.findAll({ attributes: ['hebrewYear'], where: { hebrewYear: { [Op.ne]: null } }, group: ['hebrewYear'], raw: true }),
+      getHebrewYear(),
+    ]);
+    const years = await yearOptions([...yearRows.map(r => r.hebrewYear), currentHebrewYear]);
+    res.json({ parashot: parashaRows.map(r => r.parashaName).sort(), years, currentHebrewYear });
   } catch (error) {
     res.status(500).json({ error: 'Failed to load filter options' });
   }
@@ -117,9 +125,13 @@ router.get('/filter-options/weekly', authenticateToken, authorizeAdmin, async (r
 // All Hebrew month names for a given (or current) Hebrew year, in calendar order.
 router.get('/filter-options/monthly', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
-    const currentHebrewYear = await getHebrewYear();
+    const [yearRows, currentHebrewYear] = await Promise.all([
+      Completion.findAll({ attributes: ['hebrewYear'], where: { hebrewYear: { [Op.ne]: null } }, group: ['hebrewYear'], raw: true }),
+      getHebrewYear(),
+    ]);
     const year = req.query.hebrewYear ? Number(req.query.hebrewYear) : currentHebrewYear;
-    res.json({ months: await listHebrewMonths(year), currentHebrewYear });
+    const years = await yearOptions([...yearRows.map(r => r.hebrewYear), currentHebrewYear]);
+    res.json({ months: await listHebrewMonths(year), years, currentHebrewYear });
   } catch (error) {
     res.status(500).json({ error: 'Failed to load filter options' });
   }
@@ -127,7 +139,13 @@ router.get('/filter-options/monthly', authenticateToken, authorizeAdmin, async (
 
 router.get('/filter-options/yearly', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
-    res.json({ currentHebrewYear: await getHebrewYear() });
+    const [activityYears, completionYears, currentHebrewYear] = await Promise.all([
+      Activity.findAll({ attributes: ['hebrewYear'], where: { hebrewYear: { [Op.ne]: null } }, group: ['hebrewYear'], raw: true }),
+      Completion.findAll({ attributes: ['hebrewYear'], where: { hebrewYear: { [Op.ne]: null } }, group: ['hebrewYear'], raw: true }),
+      getHebrewYear(),
+    ]);
+    const years = await yearOptions([...activityYears.map(r => r.hebrewYear), ...completionYears.map(r => r.hebrewYear), currentHebrewYear]);
+    res.json({ years, currentHebrewYear });
   } catch (error) {
     res.status(500).json({ error: 'Failed to load filter options' });
   }
@@ -169,7 +187,7 @@ router.get('/weekly', authenticateToken, authorizeAdmin, async (req, res) => {
     const rows = await weeklyRows(req.query);
     const csv = generateCSV(
       ['שם', 'תעודת זהות', 'פרשה', 'שנה עברית', 'תאריך עברי', 'השתתפה', 'נקודות'],
-      rows.map(r => [r.name, r.idNumber, r.parasha, r.hebrewYear, r.hebrewDate, r.participated ? 'כן' : 'לא', r.points])
+      rows.map(r => [r.name, r.idNumber, r.parasha, r.hebrewYearLabel, r.hebrewDate, r.participated ? 'כן' : 'לא', r.points])
     );
     sendCsv(res, csv, `activities_${(req.query.parasha || 'all').replace(/\s+/g, '_')}.csv`);
   } catch (error) {
@@ -183,7 +201,7 @@ router.get('/monthly', authenticateToken, authorizeAdmin, async (req, res) => {
     const rows = await monthlyRows(req.query);
     const csv = generateCSV(
       ['שם', 'תעודת זהות', 'מס\' השלמה', 'חודש עברי', 'שנה עברית', 'נקודות', 'תאריך עברי'],
-      rows.map(r => [r.name, r.idNumber, r.completionNumber, r.hebrewMonth, r.hebrewYear, r.points, r.hebrewDate])
+      rows.map(r => [r.name, r.idNumber, r.completionNumber, r.hebrewMonth, r.hebrewYearLabel, r.points, r.hebrewDate])
     );
     sendCsv(res, csv, `completions_${req.query.hebrewMonth || 'all'}_${req.query.hebrewYear || ''}.csv`);
   } catch (error) {
