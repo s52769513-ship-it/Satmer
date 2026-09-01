@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
+import MicRecorder from '../components/MicRecorder.jsx';
 
 function PhraseRow({ phrase, onChanged }) {
   const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef(null);
 
-  const upload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const uploadFile = async (file) => {
     setUploading(true);
     setError('');
     const formData = new FormData();
@@ -18,6 +18,7 @@ function PhraseRow({ phrase, onChanged }) {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       onChanged();
+      setRecording(false);
     } catch (err) {
       setError(err.response?.data?.error || 'שגיאה בהעלאה');
     } finally {
@@ -43,12 +44,15 @@ function PhraseRow({ phrase, onChanged }) {
       <td>
         {uploading ? (
           <span className="muted"><span className="spinner" />מעלה...</span>
+        ) : recording ? (
+          <MicRecorder onRecorded={uploadFile} />
         ) : (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <label className="btn-secondary" style={{ display: 'inline-block' }}>
-              {phrase.hasOverride ? 'החלפה' : 'העלאת הקלטה'}
-              <input ref={inputRef} type="file" accept="audio/*" onChange={upload} style={{ display: 'none' }} />
+              {phrase.hasOverride ? 'החלפה מקובץ' : 'העלאת קובץ'}
+              <input ref={inputRef} type="file" accept="audio/*" onChange={(e) => e.target.files[0] && uploadFile(e.target.files[0])} style={{ display: 'none' }} />
             </label>
+            <button type="button" className="btn-secondary" onClick={() => setRecording(true)}>🎙️ הקלטה</button>
             {phrase.hasOverride && (
               <button className="btn-secondary btn-danger" onClick={remove}>הסרה</button>
             )}
@@ -123,8 +127,7 @@ export default function Recordings() {
 
   useEffect(load, []);
 
-  const handleUpload = async (e) => {
-    const file = e.target.files[0];
+  const handleUpload = async (file) => {
     if (!file) return;
 
     setUploading(true);
@@ -165,8 +168,17 @@ export default function Recordings() {
       <div className="card">
         <h2>🎙️ העלאת קובץ קול כללי</h2>
         <p className="muted">קובץ קול נוסף שאינו קשור למשפט קבוע ספציפי (לשימוש עתידי).</p>
-        <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleUpload} disabled={uploading} style={{ width: 'auto' }} />
-        {uploading && <p className="muted"><span className="spinner" />מעלה...</p>}
+        {uploading ? (
+          <p className="muted"><span className="spinner" />מעלה...</p>
+        ) : (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="btn-secondary" style={{ display: 'inline-block' }}>
+              העלאת קובץ
+              <input ref={fileInputRef} type="file" accept="audio/*" onChange={(e) => handleUpload(e.target.files[0])} style={{ display: 'none' }} />
+            </label>
+            <MicRecorder onRecorded={handleUpload} />
+          </div>
+        )}
       </div>
 
       <div className="card">

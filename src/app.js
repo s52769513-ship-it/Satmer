@@ -8,6 +8,8 @@ const { speechCatalog } = require('./services/speech');
 const { PHRASES } = require('./utils/phrases');
 const { getParashaName } = require('./utils/hebrew-date');
 const ensureAdmin = require('./utils/ensure-admin');
+const ensureColumns = require('./utils/ensure-columns');
+const { DataTypes } = require('sequelize');
 
 const app = express();
 
@@ -77,6 +79,17 @@ const startServer = async () => {
   try {
     await db.sequelize.authenticate();
     console.log('✅ Database connected');
+
+    // Additive column migrations that sync() alone won't apply in
+    // production (see ensure-columns.js for why), run before sync so a
+    // fresh deploy always has them.
+    await ensureColumns(db.sequelize, 'completions', {
+      hebrew_month: { type: DataTypes.STRING, allowNull: true },
+      hebrew_year: { type: DataTypes.INTEGER, allowNull: true },
+    });
+    await ensureColumns(db.sequelize, 'activities', {
+      hebrew_year: { type: DataTypes.INTEGER, allowNull: true },
+    });
 
     // Sync database (use alter: true in production with caution)
     await db.sequelize.sync({ alter: process.env.NODE_ENV === 'development' });

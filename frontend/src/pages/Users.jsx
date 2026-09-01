@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../services/api';
+import UserModal from '../components/UserModal.jsx';
 
 const DAY_LABELS = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי', wednesday: 'רביעי',
@@ -16,6 +17,7 @@ export default function Users() {
   const [addError, setAddError] = useState('');
   const [importResult, setImportResult] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState(null);
   const fileInputRef = useRef(null);
 
   const loadUsers = () => {
@@ -44,12 +46,6 @@ export default function Users() {
     } catch (err) {
       setAddError(err.response?.data?.error || 'שגיאה בהוספת משתמשת');
     }
-  };
-
-  const toggleActive = async (user) => {
-    const action = user.isActive ? 'deactivate' : 'activate';
-    await api.put(`/admin/users/${user.id}/${action}`);
-    loadUsers();
   };
 
   const handleImport = async (e) => {
@@ -135,6 +131,7 @@ export default function Users() {
 
       <div className="card">
         <h2>כל התלמידות ({filteredUsers.length}{filteredUsers.length !== users.length ? ` מתוך ${users.length}` : ''})</h2>
+        <p className="muted">לחיצה על תלמידה פותחת את הכרטיס שלה - פרטים לעריכה והיסטוריית עדכונים</p>
 
         <div className="filter-bar">
           <div className="field">
@@ -167,12 +164,11 @@ export default function Users() {
                   <th>טלפון</th>
                   <th>תזכורת שבועית</th>
                   <th>סטטוס</th>
-                  <th>פעולות</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((user) => (
-                  <tr key={user.id}>
+                  <tr key={user.id} className="clickable-row" onClick={() => setSelectedUserId(user.id)}>
                     <td>{user.name}</td>
                     <td>{user.idNumber}</td>
                     <td>{user.phone || '—'}</td>
@@ -186,11 +182,6 @@ export default function Users() {
                         {user.isActive ? 'פעילה' : 'לא פעילה'}
                       </span>
                     </td>
-                    <td>
-                      <button className="btn-secondary" onClick={() => toggleActive(user)}>
-                        {user.isActive ? 'השבתה' : 'הפעלה'}
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -198,6 +189,14 @@ export default function Users() {
           </div>
         )}
       </div>
+
+      {selectedUserId && (
+        <UserModal
+          userId={selectedUserId}
+          onClose={() => setSelectedUserId(null)}
+          onChanged={loadUsers}
+        />
+      )}
     </div>
   );
 }

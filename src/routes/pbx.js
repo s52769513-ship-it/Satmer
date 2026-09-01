@@ -4,7 +4,7 @@ const { User, Activity, Completion, ActivityLog } = require('../models');
 const { validateIdNumber, getWeekStartDate, getWeekNumber, canUpdateActivityThisWeek, canUpdateCompletionThisMonth } = require('../utils/validators');
 const { speechCatalog } = require('../services/speech');
 const { PHRASES } = require('../utils/phrases');
-const { getParashaName } = require('../utils/hebrew-date');
+const { getParashaName, getHebrewMonthName, getHebrewYear } = require('../utils/hebrew-date');
 
 /**
  * Technoline PBX Extension "API" module — inbound call handler.
@@ -240,6 +240,7 @@ async function recordActivity(user, parasha) {
     weekStartDate: weekStart,
     weekNumber,
     parashaName: parasha,
+    hebrewYear: await getHebrewYear(weekStart),
     participated: true,
     points: 10,
   });
@@ -297,12 +298,15 @@ async function recordCompletion(user) {
 
   const completionCount = await Completion.count({ where: { userId: user.id } });
   const nextNumber = completionCount + 1;
+  const [hebrewMonth, hebrewYear] = await Promise.all([getHebrewMonthName(today), getHebrewYear(today)]);
 
   await Completion.create({
     userId: user.id,
     completionNumber: nextNumber,
     month: today.getMonth() + 1,
     year: today.getFullYear(),
+    hebrewMonth,
+    hebrewYear,
     points: 20,
     completedAt: today,
   });

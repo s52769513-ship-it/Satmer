@@ -40,6 +40,100 @@ router.get('/users', authenticateToken, authorizeAdmin, async (req, res) => {
   }
 });
 
+// Get one user's full details (admin only)
+router.get('/users/:userId', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.userId, {
+      attributes: { exclude: ['createdAt', 'updatedAt'] },
+    });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+// Update a user's details (admin only)
+router.put('/users/:userId', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const { name, idNumber, phone, email } = req.body;
+
+    if (name !== undefined && !name.trim()) {
+      return res.status(400).json({ error: 'Name cannot be empty' });
+    }
+    if (idNumber !== undefined) {
+      if (!validateIdNumber(idNumber)) {
+        return res.status(400).json({ error: 'Invalid ID number' });
+      }
+      const existing = await User.findOne({ where: { idNumber } });
+      if (existing && existing.id !== user.id) {
+        return res.status(409).json({ error: 'Another user already has this ID number' });
+      }
+    }
+
+    await user.update({
+      ...(name !== undefined ? { name: name.trim() } : {}),
+      ...(idNumber !== undefined ? { idNumber } : {}),
+      ...(phone !== undefined ? { phone: phone || null } : {}),
+      ...(email !== undefined ? { email: email || null } : {}),
+    });
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update user', message: error.message });
+  }
+});
+
+// One user's full activity/completion history, newest first (admin only)
+router.get('/users/:userId/history', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const [activities, completions] = await Promise.all([
+      Activity.findAll({ where: { userId: user.id }, order: [['weekStartDate', 'DESC']] }),
+      Completion.findAll({ where: { userId: user.id }, order: [['completedAt', 'DESC']] }),
+    ]);
+
+    const activityRows = await Promise.all(activities.map(async (a) => ({
+      kind: 'activity',
+      id: a.id,
+      parasha: a.parashaName || '',
+      hebrewDate: await getHebrewDateString(a.weekStartDate),
+      participated: a.participated,
+      points: a.points,
+      date: a.weekStartDate,
+    })));
+
+    const completionRows = await Promise.all(completions.map(async (c) => ({
+      kind: 'completion',
+      id: c.id,
+      completionNumber: c.completionNumber,
+      hebrewDate: await getHebrewDateString(c.completedAt),
+      points: c.points,
+      date: c.completedAt,
+    })));
+
+    const combined = [...activityRows, ...completionRows].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json({
+      totalPoints: activityRows.reduce((s, r) => s + r.points, 0) + completionRows.reduce((s, r) => s + r.points, 0),
+      history: combined,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch history', message: error.message });
+  }
+});
+
 // Add user (admin only)
 router.post('/users', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
@@ -47,6 +141,9 @@ router.post('/users', authenticateToken, authorizeAdmin, async (req, res) => {
 
     if (!name || !idNumber) {
       return res.status(400).json({ error: 'Name and ID number required' });
+    }
+    if (!validateIdNumber(idNumber)) {
+      return res.status(400).json({ error: 'Invalid ID number' });
     }
 
     const existingUser = await User.findOne({ where: { idNumber } });
@@ -160,6 +257,21 @@ router.put('/users/:userId/activate', authenticateToken, authorizeAdmin, async (
     res.json({ success: true, message: 'User activated' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to activate user' });
+  }
+});
+
+// Permanently delete a user and her activity/completion history (admin only)
+router.delete('/users/:userId', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await user.destroy();
+    res.json({ success: true, message: 'User deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete user', message: error.message });
   }
 });
 

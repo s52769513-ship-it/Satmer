@@ -19,12 +19,22 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       validate: { min: 1, max: 12 },
-      comment: 'Month of completion (1-12)',
+      comment: 'Gregorian month of completion (1-12), used for the monthly-update-limit check',
     },
     year: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      comment: 'Hebrew year',
+      comment: 'Gregorian year',
+    },
+    hebrewMonth: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Hebrew month name (e.g. תשרי), for Hebrew-calendar reporting',
+    },
+    hebrewYear: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Hebrew year (e.g. 5786), for Hebrew-calendar reporting',
     },
     description: {
       type: DataTypes.TEXT,
@@ -60,6 +70,7 @@ module.exports = (sequelize, DataTypes) => {
     indexes: [
       { fields: ['user_id', 'year', 'month'] },
       { fields: ['user_id', 'completion_number'] },
+      { fields: ['hebrew_year', 'hebrew_month'] },
     ],
   });
 

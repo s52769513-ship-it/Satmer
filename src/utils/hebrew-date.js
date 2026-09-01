@@ -46,4 +46,44 @@ function getHebrewDayName(dayKey) {
   return HEBREW_DAY_NAMES[dayKey] || dayKey;
 }
 
-module.exports = { getParashaName, getHebrewDateString, getHebrewDayName, stripNikud };
+/** Hebrew month name for `date`, e.g. "אלול" or "אדר א׳" / "אדר ב׳" in a leap year. */
+async function getHebrewMonthName(date = new Date()) {
+  const { HDate } = await import('@hebcal/core');
+  const hdate = new HDate(date);
+  // renderGematriya() gives the full "1 תשרי תשפ״ז" string; the month name
+  // is everything between the day-of-month and the year, and already
+  // disambiguates Adar I/II via the trailing ׳ character hebcal adds.
+  const parts = stripNikud(hdate.renderGematriya()).split(' ');
+  return parts.slice(1, -1).join(' ');
+}
+
+/** Hebrew year for `date`, e.g. 5786. */
+async function getHebrewYear(date = new Date()) {
+  const { HDate } = await import('@hebcal/core');
+  return new HDate(date).getFullYear();
+}
+
+/** Every month name for `hebrewYear` in calendar order (Tishrei first), for a dropdown. */
+async function listHebrewMonths(hebrewYear) {
+  const { HDate } = await import('@hebcal/core');
+  const count = HDate.monthsInYear(hebrewYear);
+  // hebcal numbers months from Nisan (1) - reorder to the customary
+  // Tishrei-first calendar-year order for display.
+  const nisanOrder = Array.from({ length: count }, (_, i) => i + 1);
+  const tishreiFirst = [...nisanOrder.slice(6), ...nisanOrder.slice(0, 6)];
+  return tishreiFirst.map((m) => {
+    const hdate = new HDate(1, m, hebrewYear);
+    const parts = stripNikud(hdate.renderGematriya()).split(' ');
+    return parts.slice(1, -1).join(' ');
+  });
+}
+
+module.exports = {
+  getParashaName,
+  getHebrewDateString,
+  getHebrewDayName,
+  getHebrewMonthName,
+  getHebrewYear,
+  listHebrewMonths,
+  stripNikud,
+};

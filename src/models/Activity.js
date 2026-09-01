@@ -25,6 +25,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       comment: 'Torah portion name (Parsha)',
     },
+    hebrewYear: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Hebrew year (e.g. 5786), for Hebrew-calendar reporting',
+    },
     participated: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

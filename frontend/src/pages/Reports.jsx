@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 
-const currentYear = new Date().getFullYear();
-
 async function downloadReport(url, filename) {
   const { data } = await api.get(url, { responseType: 'blob' });
   const link = document.createElement('a');
@@ -81,124 +79,175 @@ function ReportSection({ title, description, children, previewUrl, params, downl
   );
 }
 
-export default function Reports() {
-  const [week, setWeek] = useState(1);
-  const [weekYear, setWeekYear] = useState(currentYear);
+function WeeklyReport() {
+  const [parashot, setParashot] = useState([]);
+  const [currentYear, setCurrentYear] = useState('');
+  const [parasha, setParasha] = useState('');
+  const [hebrewYear, setHebrewYear] = useState('');
   const [participated, setParticipated] = useState('all');
-  const [weekSearch, setWeekSearch] = useState('');
+  const [search, setSearch] = useState('');
 
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [monthYear, setMonthYear] = useState(currentYear);
-  const [monthSearch, setMonthSearch] = useState('');
+  useEffect(() => {
+    api.get('/reports/filter-options/weekly').then((res) => {
+      setParashot(res.data.parashot);
+      setCurrentYear(res.data.currentHebrewYear);
+      setHebrewYear(res.data.currentHebrewYear);
+    });
+  }, []);
 
-  const [year, setYear] = useState(currentYear);
-  const [yearSearch, setYearSearch] = useState('');
+  return (
+    <ReportSection
+      title="📅 דוח שבועי - לפי פרשה"
+      description="פעילות חסד, מסוננת לפי פרשת השבוע ושנה עברית"
+      previewUrl="/reports/weekly/preview"
+      downloadUrl="/reports/weekly"
+      downloadFilename={`activities_${parasha || 'all'}.csv`}
+      params={{ parasha: parasha || undefined, hebrewYear: hebrewYear || undefined, participated: participated === 'all' ? undefined : participated, search: search || undefined }}
+      columns={[
+        { key: 'name', label: 'שם' },
+        { key: 'idNumber', label: 'ת.ז' },
+        { key: 'parasha', label: 'פרשה' },
+        { key: 'hebrewDate', label: 'תאריך עברי' },
+        { key: 'participated', label: 'השתתפה', render: (r) => <span className={`badge ${r.participated ? 'badge-success' : 'badge-danger'}`}>{r.participated ? 'כן' : 'לא'}</span> },
+        { key: 'points', label: 'נקודות' },
+      ]}
+    >
+      <div className="field">
+        <label>פרשה</label>
+        <select value={parasha} onChange={(e) => setParasha(e.target.value)}>
+          <option value="">כל הפרשות</option>
+          {parashot.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+      <div className="field">
+        <label>שנה עברית</label>
+        <input type="number" value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)} placeholder={String(currentYear)} />
+      </div>
+      <div className="field">
+        <label>השתתפות</label>
+        <select value={participated} onChange={(e) => setParticipated(e.target.value)}>
+          <option value="all">הכל</option>
+          <option value="yes">השתתפו</option>
+          <option value="no">לא השתתפו</option>
+        </select>
+      </div>
+      <div className="field">
+        <label>חיפוש שם/ת.ז</label>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+    </ReportSection>
+  );
+}
+
+function MonthlyReport() {
+  const [months, setMonths] = useState([]);
+  const [currentYear, setCurrentYear] = useState('');
+  const [hebrewMonth, setHebrewMonth] = useState('');
+  const [hebrewYear, setHebrewYear] = useState('');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    api.get('/reports/filter-options/monthly', { params: { hebrewYear: hebrewYear || undefined } }).then((res) => {
+      setMonths(res.data.months);
+      setCurrentYear(res.data.currentHebrewYear);
+      if (!hebrewYear) setHebrewYear(res.data.currentHebrewYear);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hebrewYear]);
+
+  return (
+    <ReportSection
+      title="🗓️ דוח חודשי - לפי חודש עברי"
+      description="השלמות, מסוננות לפי חודש ושנה עברית"
+      previewUrl="/reports/monthly/preview"
+      downloadUrl="/reports/monthly"
+      downloadFilename={`completions_${hebrewMonth || 'all'}.csv`}
+      params={{ hebrewMonth: hebrewMonth || undefined, hebrewYear: hebrewYear || undefined, search: search || undefined }}
+      columns={[
+        { key: 'name', label: 'שם' },
+        { key: 'idNumber', label: 'ת.ז' },
+        { key: 'completionNumber', label: 'מס\' השלמה' },
+        { key: 'points', label: 'נקודות' },
+        { key: 'hebrewDate', label: 'תאריך עברי' },
+      ]}
+    >
+      <div className="field">
+        <label>חודש עברי</label>
+        <select value={hebrewMonth} onChange={(e) => setHebrewMonth(e.target.value)}>
+          <option value="">כל החודשים</option>
+          {months.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+      </div>
+      <div className="field">
+        <label>שנה עברית</label>
+        <input type="number" value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)} placeholder={String(currentYear)} />
+      </div>
+      <div className="field">
+        <label>חיפוש שם/ת.ז</label>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+    </ReportSection>
+  );
+}
+
+function YearlyReport() {
+  const [currentYear, setCurrentYear] = useState('');
+  const [hebrewYear, setHebrewYear] = useState('');
+  const [search, setSearch] = useState('');
   const [minPoints, setMinPoints] = useState('');
 
+  useEffect(() => {
+    api.get('/reports/filter-options/yearly').then((res) => {
+      setCurrentYear(res.data.currentHebrewYear);
+      setHebrewYear(res.data.currentHebrewYear);
+    });
+  }, []);
+
+  return (
+    <ReportSection
+      title="📊 דוח שנתי מסכם - לפי שנה עברית"
+      description="סיכום נקודות שנתי לכל תלמידה"
+      previewUrl="/reports/yearly/preview"
+      downloadUrl="/reports/yearly"
+      downloadFilename={`yearly_report_${hebrewYear || currentYear}.csv`}
+      params={{ hebrewYear: hebrewYear || undefined, search: search || undefined, minPoints: minPoints || undefined }}
+      columns={[
+        { key: 'name', label: 'שם' },
+        { key: 'idNumber', label: 'ת.ז' },
+        { key: 'participated', label: 'השתתפויות' },
+        { key: 'completions', label: 'השלמות' },
+        { key: 'totalPoints', label: 'סה"כ נקודות' },
+      ]}
+    >
+      <div className="field">
+        <label>שנה עברית</label>
+        <input type="number" value={hebrewYear} onChange={(e) => setHebrewYear(e.target.value)} placeholder={String(currentYear)} />
+      </div>
+      <div className="field">
+        <label>חיפוש שם/ת.ז</label>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+      <div className="field">
+        <label>מינימום נקודות</label>
+        <input type="number" value={minPoints} onChange={(e) => setMinPoints(e.target.value)} placeholder="0" />
+      </div>
+    </ReportSection>
+  );
+}
+
+export default function Reports() {
   return (
     <div>
       <div className="page-header">
         <div>
           <h2>דוחות והורדות</h2>
-          <p>תצוגה מקדימה עם סינון, לפני הורדת קובץ CSV</p>
+          <p>לפי לוח השנה העברי - תצוגה מקדימה עם סינון, לפני הורדת קובץ CSV</p>
         </div>
       </div>
 
-      <ReportSection
-        title="📅 דוח שבועי"
-        description="פעילות חסד לפי שבוע"
-        previewUrl="/reports/weekly/preview"
-        downloadUrl="/reports/weekly"
-        downloadFilename={`activities_week_${week}_${weekYear}.csv`}
-        params={{ week, year: weekYear, participated: participated === 'all' ? undefined : participated, search: weekSearch || undefined }}
-        columns={[
-          { key: 'name', label: 'שם' },
-          { key: 'idNumber', label: 'ת.ז' },
-          { key: 'parasha', label: 'פרשה' },
-          { key: 'hebrewDate', label: 'תאריך עברי' },
-          { key: 'participated', label: 'השתתפה', render: (r) => <span className={`badge ${r.participated ? 'badge-success' : 'badge-danger'}`}>{r.participated ? 'כן' : 'לא'}</span> },
-          { key: 'points', label: 'נקודות' },
-        ]}
-      >
-        <div className="field">
-          <label>שבוע</label>
-          <input type="number" value={week} onChange={(e) => setWeek(e.target.value)} min={1} max={53} />
-        </div>
-        <div className="field">
-          <label>שנה</label>
-          <input type="number" value={weekYear} onChange={(e) => setWeekYear(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>השתתפות</label>
-          <select value={participated} onChange={(e) => setParticipated(e.target.value)}>
-            <option value="all">הכל</option>
-            <option value="yes">השתתפו</option>
-            <option value="no">לא השתתפו</option>
-          </select>
-        </div>
-        <div className="field">
-          <label>חיפוש שם/ת.ז</label>
-          <input value={weekSearch} onChange={(e) => setWeekSearch(e.target.value)} />
-        </div>
-      </ReportSection>
-
-      <ReportSection
-        title="🗓️ דוח חודשי"
-        description="השלמות לפי חודש"
-        previewUrl="/reports/monthly/preview"
-        downloadUrl="/reports/monthly"
-        downloadFilename={`completions_${month}_${monthYear}.csv`}
-        params={{ month, year: monthYear, search: monthSearch || undefined }}
-        columns={[
-          { key: 'name', label: 'שם' },
-          { key: 'idNumber', label: 'ת.ז' },
-          { key: 'completionNumber', label: 'מס\' השלמה' },
-          { key: 'points', label: 'נקודות' },
-          { key: 'hebrewDate', label: 'תאריך עברי' },
-        ]}
-      >
-        <div className="field">
-          <label>חודש</label>
-          <input type="number" value={month} onChange={(e) => setMonth(e.target.value)} min={1} max={12} />
-        </div>
-        <div className="field">
-          <label>שנה</label>
-          <input type="number" value={monthYear} onChange={(e) => setMonthYear(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>חיפוש שם/ת.ז</label>
-          <input value={monthSearch} onChange={(e) => setMonthSearch(e.target.value)} />
-        </div>
-      </ReportSection>
-
-      <ReportSection
-        title="📊 דוח שנתי מסכם"
-        description="סיכום נקודות שנתי לכל תלמידה"
-        previewUrl="/reports/yearly/preview"
-        downloadUrl="/reports/yearly"
-        downloadFilename={`yearly_report_${year}.csv`}
-        params={{ year, search: yearSearch || undefined, minPoints: minPoints || undefined }}
-        columns={[
-          { key: 'name', label: 'שם' },
-          { key: 'idNumber', label: 'ת.ז' },
-          { key: 'participated', label: 'השתתפויות' },
-          { key: 'completions', label: 'השלמות' },
-          { key: 'totalPoints', label: 'סה"כ נקודות' },
-        ]}
-      >
-        <div className="field">
-          <label>שנה</label>
-          <input type="number" value={year} onChange={(e) => setYear(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>חיפוש שם/ת.ז</label>
-          <input value={yearSearch} onChange={(e) => setYearSearch(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>מינימום נקודות</label>
-          <input type="number" value={minPoints} onChange={(e) => setMinPoints(e.target.value)} placeholder="0" />
-        </div>
-      </ReportSection>
+      <WeeklyReport />
+      <MonthlyReport />
+      <YearlyReport />
     </div>
   );
 }
