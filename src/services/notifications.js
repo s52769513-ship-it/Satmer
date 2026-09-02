@@ -41,7 +41,7 @@ class NotificationService {
     const result = await this._run({
       audioText: message,
       phones: [phone],
-      title: title || 'Satmer Chesed Notification',
+      title: title || 'Yatzliach Chesed Organization Notification',
       callLength: 25,
       dialRetries: 2,
       betweenRetries: 20,
@@ -93,7 +93,7 @@ class NotificationService {
     const result = await this._run({
       audioText: message,
       phones,
-      title: 'Satmer Admin Broadcast',
+      title: 'Yatzliach Chesed Organization Admin Broadcast',
       callLength: 25,
       dialRetries: 2,
       betweenRetries: 20,

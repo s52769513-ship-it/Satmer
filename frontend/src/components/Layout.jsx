@@ -23,7 +23,7 @@ export default function Layout({ children }) {
       <aside className="sidebar">
         <div className="brand">
           <div className="icon">💜</div>
-          <h1>מערכת פעילות חסד</h1>
+          <h1>יצלח חסד ארגענעזאציע</h1>
         </div>
         <nav>
           {NAV_ITEMS.map((item) => (
