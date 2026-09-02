@@ -4,6 +4,7 @@ import api from '../services/api';
 
 export default function Login() {
   const [idNumber, setIdNumber] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -13,12 +14,7 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/login', { idNumber });
-      if (data.user.role !== 'admin') {
-        setError('הכניסה לאתר הניהול מיועדת למנהלות המערכת בלבד');
-        setLoading(false);
-        return;
-      }
+      const { data } = await api.post('/auth/login', { idNumber, password });
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/');
@@ -41,6 +37,15 @@ export default function Login() {
             onChange={(e) => setIdNumber(e.target.value)}
             placeholder="123456789"
             maxLength={9}
+            required
+          />
+        </div>
+        <div className="field">
+          <label>סיסמה</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             required
           />
         </div>

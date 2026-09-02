@@ -1,26 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const { validateIdNumber } = require('../utils/validators');
 
-// Authenticate with ID number
+// Authenticate with ID number + password. Admin-website login only - the
+// phone line identifies students by ID number alone (see routes/pbx.js),
+// so only admin accounts ever have a password set.
 router.post('/login', async (req, res) => {
   try {
-    const { idNumber } = req.body;
+    const { idNumber, password } = req.body;
 
     if (!idNumber || !validateIdNumber(idNumber)) {
       return res.status(400).json({ error: 'Invalid ID number format' });
     }
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
 
-    let user = await User.findOne({ where: { idNumber } });
+    const user = await User.findOne({ where: { idNumber } });
 
-    if (!user) {
-      // Create new user if not exists
-      user = await User.create({
-        idNumber,
-        name: `User ${idNumber}`,
-      });
+    // Same generic error whether the ID doesn't exist, isn't an admin, has
+    // no password set yet, or the password is wrong - don't leak which.
+    if (!user || user.role !== 'admin' || !user.password || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'Invalid ID number or password' });
     }
 
     if (!user.isActive) {

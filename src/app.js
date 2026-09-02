@@ -90,6 +90,9 @@ const startServer = async () => {
     await ensureColumns(db.sequelize, 'activities', {
       hebrew_year: { type: DataTypes.INTEGER, allowNull: true },
     });
+    await ensureColumns(db.sequelize, 'users', {
+      password: { type: DataTypes.STRING, allowNull: true },
+    });
 
     // Sync database (use alter: true in production with caution)
     await db.sequelize.sync({ alter: process.env.NODE_ENV === 'development' });

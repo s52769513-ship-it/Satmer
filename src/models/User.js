@@ -15,6 +15,11 @@ module.exports = (sequelize, DataTypes) => {
       unique: true,
       comment: 'Israeli ID number',
     },
+    password: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Bcrypt hash of the admin website password (only set for admin accounts)',
+    },
     phone: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -65,6 +70,14 @@ module.exports = (sequelize, DataTypes) => {
     User.hasMany(models.Completion, { foreignKey: 'userId', as: 'completions' });
     User.hasMany(models.UserNotification, { foreignKey: 'userId', as: 'notifications' });
     User.hasMany(models.ActivityLog, { foreignKey: 'userId', as: 'logs' });
+  };
+
+  // Never serialize the password hash into an API response, regardless of
+  // which route or attribute-exclusion list handles it.
+  User.prototype.toJSON = function toJSON() {
+    const values = { ...this.get() };
+    delete values.password;
+    return values;
   };
 
   return User;
