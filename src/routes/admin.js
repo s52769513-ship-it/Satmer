@@ -15,8 +15,12 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 // Recognized Hebrew/English column header variants, matched case-insensitively.
 const NAME_HEADERS = ['שם', 'שם מלא', 'name', 'full name'];
+const FIRST_NAME_HEADERS = ['שם פרטי', 'first name', 'firstname'];
+const LAST_NAME_HEADERS = ['שם משפחה', 'last name', 'lastname', 'surname'];
 const ID_HEADERS = ['תעודת זהות', 'ת.ז', 'ת״ז', 'תז', 'id', 'idnumber', 'id number'];
 const PHONE_HEADERS = ['טלפון', 'נייד', 'phone', 'mobile'];
+const GRADE_HEADERS = ['כיתה', 'class', 'grade'];
+const STATUS_HEADERS = ['סטטוס', 'פעילה', 'פעיל/לא פעיל', 'status', 'active'];
 
 function findColumn(headerRow, candidates) {
   for (let col = 1; col <= headerRow.cellCount; col++) {
@@ -24,6 +28,14 @@ function findColumn(headerRow, candidates) {
     if (candidates.some(c => c.toLowerCase() === value)) return col;
   }
   return null;
+}
+
+// "לא פעילה"/"לא פעיל"/"לא"/false/0/inactive/no -> false, any other non-empty value -> true.
+function parseActiveFlag(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  if (!value) return undefined;
+  const inactiveValues = ['לא פעילה', 'לא פעיל', 'לא', 'false', '0', 'inactive', 'no'];
+  return !inactiveValues.includes(value);
 }
 
 // Get all users (admin only)
@@ -63,7 +75,7 @@ router.put('/users/:userId', authenticateToken, authorizeAdmin, async (req, res)
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const { name, idNumber, phone, email } = req.body;
+    const { name, idNumber, phone, email, grade } = req.body;
 
     if (name !== undefined && !name.trim()) {
       return res.status(400).json({ error: 'Name cannot be empty' });
@@ -83,6 +95,7 @@ router.put('/users/:userId', authenticateToken, authorizeAdmin, async (req, res)
       ...(idNumber !== undefined ? { idNumber } : {}),
       ...(phone !== undefined ? { phone: phone || null } : {}),
       ...(email !== undefined ? { email: email || null } : {}),
+      ...(grade !== undefined ? { grade: grade || null } : {}),
     });
 
     res.json(user);
@@ -137,7 +150,7 @@ router.get('/users/:userId/history', authenticateToken, authorizeAdmin, async (r
 // Add user (admin only)
 router.post('/users', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
-    const { name, idNumber } = req.body;
+    const { name, idNumber, grade } = req.body;
 
     if (!name || !idNumber) {
       return res.status(400).json({ error: 'Name and ID number required' });
@@ -151,7 +164,7 @@ router.post('/users', authenticateToken, authorizeAdmin, async (req, res) => {
       return res.status(409).json({ error: 'User with this ID already exists' });
     }
 
-    const user = await User.create({ name, idNumber });
+    const user = await User.create({ name, idNumber, grade: grade || null });
     res.status(201).json(user);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create user' });
@@ -176,13 +189,17 @@ router.post('/users/import', authenticateToken, authorizeAdmin, upload.single('f
 
     const headerRow = sheet.getRow(1);
     const nameCol = findColumn(headerRow, NAME_HEADERS);
+    const firstNameCol = findColumn(headerRow, FIRST_NAME_HEADERS);
+    const lastNameCol = findColumn(headerRow, LAST_NAME_HEADERS);
     const idCol = findColumn(headerRow, ID_HEADERS);
     const phoneCol = findColumn(headerRow, PHONE_HEADERS);
+    const gradeCol = findColumn(headerRow, GRADE_HEADERS);
+    const statusCol = findColumn(headerRow, STATUS_HEADERS);
 
-    if (!nameCol || !idCol) {
+    if ((!nameCol && !firstNameCol && !lastNameCol) || !idCol) {
       return res.status(400).json({
         error: 'Could not find required columns',
-        message: 'העמודה חייבת לכלול כותרות "שם" ו"תעודת זהות" (או name/id)',
+        message: 'העמודה חייבת לכלול כותרת "שם" (או "שם פרטי"/"שם משפחה") וכותרת "תעודת זהות" (או name/id)',
       });
     }
 
@@ -190,9 +207,14 @@ router.post('/users/import', authenticateToken, authorizeAdmin, upload.single('f
 
     for (let rowNum = 2; rowNum <= sheet.rowCount; rowNum++) {
       const row = sheet.getRow(rowNum);
-      const name = String(row.getCell(nameCol).value || '').trim();
+      const combinedName = nameCol ? String(row.getCell(nameCol).value || '').trim() : '';
+      const firstName = firstNameCol ? String(row.getCell(firstNameCol).value || '').trim() : '';
+      const lastName = lastNameCol ? String(row.getCell(lastNameCol).value || '').trim() : '';
+      const name = combinedName || [firstName, lastName].filter(Boolean).join(' ');
       const idNumber = String(row.getCell(idCol).value || '').trim().replace(/\D/g, '');
       const phone = phoneCol ? String(row.getCell(phoneCol).value || '').trim() : undefined;
+      const grade = gradeCol ? String(row.getCell(gradeCol).value || '').trim() : undefined;
+      const isActive = statusCol ? parseActiveFlag(row.getCell(statusCol).value) : undefined;
 
       if (!name && !idNumber) continue; // blank row
 
@@ -208,13 +230,23 @@ router.post('/users/import', authenticateToken, authorizeAdmin, upload.single('f
 
       const [user, created] = await User.findOrCreate({
         where: { idNumber },
-        defaults: { name, phone: phone || null },
+        defaults: {
+          name,
+          phone: phone || null,
+          grade: grade || null,
+          ...(isActive !== undefined ? { isActive } : {}),
+        },
       });
 
       if (created) {
         results.added += 1;
       } else {
-        await user.update({ name, ...(phone ? { phone } : {}) });
+        await user.update({
+          name,
+          ...(phone ? { phone } : {}),
+          ...(grade !== undefined ? { grade: grade || null } : {}),
+          ...(isActive !== undefined ? { isActive } : {}),
+        });
         results.updated += 1;
       }
     }
@@ -257,6 +289,21 @@ router.put('/users/:userId/activate', authenticateToken, authorizeAdmin, async (
     res.json({ success: true, message: 'User activated' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to activate user' });
+  }
+});
+
+// Permanently delete multiple users and their history at once (admin only)
+router.post('/users/bulk-delete', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const { userIds } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'userIds array is required' });
+    }
+
+    const deleted = await User.destroy({ where: { id: userIds } });
+    res.json({ success: true, deleted });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete users', message: error.message });
   }
 });
 

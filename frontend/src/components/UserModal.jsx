@@ -4,7 +4,7 @@ import api from '../services/api';
 const HISTORY_ICONS = { activity: '✅', completion: '⭐' };
 
 function DetailsTab({ user, onSaved }) {
-  const [form, setForm] = useState({ name: user.name, idNumber: user.idNumber, phone: user.phone || '', email: user.email || '' });
+  const [form, setForm] = useState({ name: user.name, idNumber: user.idNumber, phone: user.phone || '', email: user.email || '', grade: user.grade || '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -34,6 +34,10 @@ function DetailsTab({ user, onSaved }) {
       <div className="field">
         <label>תעודת זהות</label>
         <input value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} maxLength={9} required />
+      </div>
+      <div className="field">
+        <label>כיתה</label>
+        <input value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} />
       </div>
       <div className="field">
         <label>טלפון</label>

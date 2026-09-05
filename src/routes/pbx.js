@@ -242,7 +242,7 @@ async function recordActivity(user, parasha) {
     parashaName: parasha,
     hebrewYear: await getHebrewYear(weekStart),
     participated: true,
-    points: 10,
+    points: 1,
   });
 
   await user.update({ lastActivityUpdate: new Date() });
@@ -307,7 +307,7 @@ async function recordCompletion(user) {
     year: today.getFullYear(),
     hebrewMonth,
     hebrewYear,
-    points: 20,
+    points: 1,
     completedAt: today,
   });
 

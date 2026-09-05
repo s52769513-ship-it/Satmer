@@ -92,6 +92,7 @@ const startServer = async () => {
     });
     await ensureColumns(db.sequelize, 'users', {
       password: { type: DataTypes.STRING, allowNull: true },
+      grade: { type: DataTypes.STRING, allowNull: true },
     });
 
     // Sync database (use alter: true in production with caution)

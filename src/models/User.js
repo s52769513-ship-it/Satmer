@@ -28,6 +28,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    grade: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Class/grade (כיתה)',
+    },
     role: {
       type: DataTypes.ENUM('user', 'admin'),
       defaultValue: 'user',

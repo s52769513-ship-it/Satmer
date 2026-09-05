@@ -13,11 +13,14 @@ export default function Users() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [gradeFilter, setGradeFilter] = useState('all');
   const [newUser, setNewUser] = useState({ name: '', idNumber: '' });
   const [addError, setAddError] = useState('');
   const [importResult, setImportResult] = useState(null);
   const [importing, setImporting] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const fileInputRef = useRef(null);
 
   const loadUsers = () => {
@@ -27,14 +30,52 @@ export default function Users() {
 
   useEffect(loadUsers, []);
 
+  const grades = useMemo(() => [...new Set(users.map((u) => u.grade).filter(Boolean))].sort(), [users]);
+
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       if (statusFilter === 'active' && !u.isActive) return false;
       if (statusFilter === 'inactive' && u.isActive) return false;
+      if (gradeFilter !== 'all' && u.grade !== gradeFilter) return false;
       if (search && !u.name.includes(search) && !u.idNumber.includes(search)) return false;
       return true;
     });
-  }, [users, search, statusFilter]);
+  }, [users, search, statusFilter, gradeFilter]);
+
+  // Selection can only ever contain rows currently visible under the filter.
+  useEffect(() => {
+    const visibleIds = new Set(filteredUsers.map((u) => u.id));
+    setSelectedIds((prev) => new Set([...prev].filter((id) => visibleIds.has(id))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredUsers]);
+
+  const toggleSelected = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allVisibleSelected = filteredUsers.length > 0 && filteredUsers.every((u) => selectedIds.has(u.id));
+  const toggleSelectAll = () => {
+    setSelectedIds(allVisibleSelected ? new Set() : new Set(filteredUsers.map((u) => u.id)));
+  };
+
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`למחוק לצמיתות ${selectedIds.size} תלמידות? פעולה זו אינה הפיכה ותמחק גם את כל היסטוריית העדכונים שלהן.`)) return;
+    setBulkDeleting(true);
+    try {
+      await api.post('/admin/users/bulk-delete', { userIds: [...selectedIds] });
+      setSelectedIds(new Set());
+      loadUsers();
+    } catch {
+      setError('שגיאה במחיקה מרובה');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const addUser = async (e) => {
     e.preventDefault();
@@ -83,7 +124,8 @@ export default function Users() {
       <div className="card">
         <h2>📥 ייבוא רשימת תלמידות מאקסל</h2>
         <p className="muted">
-          קובץ Excel עם כותרות בשורה הראשונה: <strong>שם</strong> ו-<strong>תעודת זהות</strong> (עמודת טלפון אופציונלית).
+          קובץ Excel עם כותרות בשורה הראשונה: <strong>שם</strong> (או <strong>שם פרטי</strong> + <strong>שם משפחה</strong> בעמודות נפרדות)
+          ו-<strong>תעודת זהות</strong>. עמודות אופציונליות: <strong>טלפון</strong>, <strong>כיתה</strong>, <strong>סטטוס</strong> (פעילה/לא פעילה).
           תלמידה קיימת (לפי ת.ז) תתעדכן, תלמידה חדשה תיווצר.
         </p>
         <input
@@ -146,6 +188,18 @@ export default function Users() {
               <option value="inactive">לא פעילות</option>
             </select>
           </div>
+          <div className="field">
+            <label>כיתה</label>
+            <select value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
+              <option value="all">הכל</option>
+              {grades.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+          {selectedIds.size > 0 && (
+            <button className="btn-secondary btn-danger" onClick={bulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? 'מוחקת...' : `מחיקת ${selectedIds.size} נבחרות`}
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -159,8 +213,10 @@ export default function Users() {
             <table>
               <thead>
                 <tr>
+                  <th><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} /></th>
                   <th>שם</th>
                   <th>תעודת זהות</th>
+                  <th>כיתה</th>
                   <th>טלפון</th>
                   <th>תזכורת שבועית</th>
                   <th>סטטוס</th>
@@ -169,8 +225,12 @@ export default function Users() {
               <tbody>
                 {filteredUsers.map((user) => (
                   <tr key={user.id} className="clickable-row" onClick={() => setSelectedUserId(user.id)}>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selectedIds.has(user.id)} onChange={() => toggleSelected(user.id)} />
+                    </td>
                     <td>{user.name}</td>
                     <td>{user.idNumber}</td>
+                    <td>{user.grade || '—'}</td>
                     <td>{user.phone || '—'}</td>
                     <td>
                       {user.notificationDay

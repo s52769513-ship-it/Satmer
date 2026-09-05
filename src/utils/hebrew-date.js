@@ -57,10 +57,20 @@ async function getHebrewMonthName(date = new Date()) {
   return parts.slice(1, -1).join(' ');
 }
 
-/** Hebrew year for `date`, e.g. 5786. */
+/**
+ * The organization's tracking year for `date`: a cycle that starts on Rosh
+ * Chodesh Sivan rather than the religious calendar's own Tishrei 1, so it
+ * doesn't line up with `HDate.getFullYear()`. A cycle beginning 1 Sivan of
+ * calendar year Y runs Sivan(Y)..Elul(Y), then Tishrei(Y+1)..Iyar(Y+1) - the
+ * majority of it (8 of 12 months) falls in calendar year Y+1, so that's its
+ * label, matching how a Sivan-to-Sivan "school year" is customarily named.
+ */
 async function getHebrewYear(date = new Date()) {
   const { HDate } = await import('@hebcal/core');
-  return new HDate(date).getFullYear();
+  const hdate = new HDate(date);
+  const year = hdate.getFullYear();
+  const sivanOne = new HDate(1, 3, year); // 1 Sivan of the same calendar year
+  return hdate.abs() >= sivanOne.abs() ? year + 1 : year;
 }
 
 /** Numeric Hebrew year (e.g. 5786) as customary letters, e.g. "תשפ״ו". */
@@ -69,19 +79,28 @@ async function hebrewYearLetters(year) {
   return stripNikud(gematriya(year));
 }
 
-/** Every month name for `hebrewYear` in calendar order (Tishrei first), for a dropdown. */
+/**
+ * Every month name for tracking year `hebrewYear`, in the order they occur
+ * within that Sivan-anchored cycle (see getHebrewYear): Sivan..Elul of
+ * calendar year `hebrewYear - 1`, then Tishrei..Iyar of calendar year
+ * `hebrewYear` itself - so, unlike a plain calendar year, this list can
+ * straddle a leap year on either side of the Sivan boundary.
+ */
 async function listHebrewMonths(hebrewYear) {
   const { HDate } = await import('@hebcal/core');
-  const count = HDate.monthsInYear(hebrewYear);
-  // hebcal numbers months from Nisan (1) - reorder to the customary
-  // Tishrei-first calendar-year order for display.
-  const nisanOrder = Array.from({ length: count }, (_, i) => i + 1);
-  const tishreiFirst = [...nisanOrder.slice(6), ...nisanOrder.slice(0, 6)];
-  return tishreiFirst.map((m) => {
-    const hdate = new HDate(1, m, hebrewYear);
+  const monthName = (year, month) => {
+    const hdate = new HDate(1, month, year);
     const parts = stripNikud(hdate.renderGematriya()).split(' ');
     return parts.slice(1, -1).join(' ');
-  });
+  };
+
+  const priorYear = hebrewYear - 1;
+  const earlyPart = [3, 4, 5, 6].map((m) => monthName(priorYear, m)); // Sivan..Elul
+  const countThisYear = HDate.monthsInYear(hebrewYear);
+  const latterIndices = [...Array(countThisYear - 6).keys()].map((i) => i + 7).concat([1, 2]); // Tishrei..(Adar/Adar II), then Nisan, Iyar
+  const latterPart = latterIndices.map((m) => monthName(hebrewYear, m));
+
+  return [...earlyPart, ...latterPart];
 }
 
 module.exports = {
