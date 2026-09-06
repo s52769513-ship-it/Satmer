@@ -9,6 +9,7 @@ const { PHRASES } = require('./utils/phrases');
 const { getParashaName } = require('./utils/hebrew-date');
 const ensureAdmin = require('./utils/ensure-admin');
 const ensureColumns = require('./utils/ensure-columns');
+const fixLegacyPoints = require('./utils/fix-legacy-points');
 const { DataTypes } = require('sequelize');
 
 const app = express();
@@ -99,6 +100,7 @@ const startServer = async () => {
     await db.sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
     console.log('✅ Database synced');
 
+    await fixLegacyPoints(db.sequelize);
     await ensureAdmin();
 
     // Setup scheduled jobs

@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 const NAV_ITEMS = [
   { to: '/', label: 'לוח בקרה', icon: '📊', end: true },
   { to: '/users', label: 'ניהול משתמשות', icon: '👥' },
+  { to: '/classes', label: 'ניהול כיתות', icon: '🏫' },
   { to: '/reports', label: 'דוחות והורדות', icon: '📄' },
   { to: '/recordings', label: 'ניהול הקלטות', icon: '🎙️' },
   { to: '/messages', label: 'שליחת הודעות', icon: '📞' },

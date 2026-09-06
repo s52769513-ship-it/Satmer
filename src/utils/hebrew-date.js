@@ -103,6 +103,25 @@ async function listHebrewMonths(hebrewYear) {
   return [...earlyPart, ...latterPart];
 }
 
+/**
+ * True if any day in the app's current week (see validators.getWeekStartDate)
+ * falls within Chol Hamoed (the intermediate days of Sukkot or Pesach).
+ * `flags.CHOL_HAMOED` is a bitflag - an event's `.getFlags()` needs a
+ * bitwise AND, not equality, since a day can carry more than one flag.
+ */
+async function isCholHamoedWeek(date = new Date()) {
+  const { HDate, getHolidaysOnDate, flags } = await import('@hebcal/core');
+  const { getWeekStartDate } = require('./validators');
+  const weekStart = getWeekStartDate(date);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    const events = getHolidaysOnDate(new HDate(d), /* il */ true) || [];
+    if (events.some((e) => (e.getFlags() & flags.CHOL_HAMOED) !== 0)) return true;
+  }
+  return false;
+}
+
 module.exports = {
   getParashaName,
   getHebrewDateString,
@@ -110,6 +129,7 @@ module.exports = {
   getHebrewMonthName,
   getHebrewYear,
   hebrewYearLetters,
+  isCholHamoedWeek,
   listHebrewMonths,
   stripNikud,
 };

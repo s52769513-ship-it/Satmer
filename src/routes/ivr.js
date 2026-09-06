@@ -41,11 +41,11 @@ router.post('/extension-1/status', authenticateToken, async (req, res) => {
         weekStartDate: weekStart,
         weekNumber,
         participated: participated === true || participated === '1',
-        points: participated ? 10 : 0,
+        points: participated ? 1 : 0,
       });
     } else {
       activity.participated = participated === true || participated === '1';
-      activity.points = activity.participated ? 10 : 0;
+      activity.points = activity.participated ? 1 : 0;
       await activity.save();
     }
 
@@ -141,7 +141,7 @@ router.post('/extension-2/status', authenticateToken, async (req, res) => {
       completionNumber: nextNumber,
       month: today.getMonth() + 1,
       year: today.getFullYear(),
-      points: 20,
+      points: 1,
       completedAt: today,
     });
 

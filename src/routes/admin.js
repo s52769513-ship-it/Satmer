@@ -210,7 +210,7 @@ router.post('/users/import', authenticateToken, authorizeAdmin, upload.single('f
       const combinedName = nameCol ? String(row.getCell(nameCol).value || '').trim() : '';
       const firstName = firstNameCol ? String(row.getCell(firstNameCol).value || '').trim() : '';
       const lastName = lastNameCol ? String(row.getCell(lastNameCol).value || '').trim() : '';
-      const name = combinedName || [firstName, lastName].filter(Boolean).join(' ');
+      const name = combinedName || [lastName, firstName].filter(Boolean).join(' ');
       const idNumber = String(row.getCell(idCol).value || '').trim().replace(/\D/g, '');
       const phone = phoneCol ? String(row.getCell(phoneCol).value || '').trim() : undefined;
       const grade = gradeCol ? String(row.getCell(gradeCol).value || '').trim() : undefined;
@@ -289,6 +289,21 @@ router.put('/users/:userId/activate', authenticateToken, authorizeAdmin, async (
     res.json({ success: true, message: 'User activated' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to activate user' });
+  }
+});
+
+// Assign (or clear) a class/grade for multiple users at once (admin only)
+router.post('/users/bulk-set-grade', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const { userIds, grade } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'userIds array is required' });
+    }
+
+    const [updated] = await User.update({ grade: grade || null }, { where: { id: userIds } });
+    res.json({ success: true, updated });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update grade', message: error.message });
   }
 });
 

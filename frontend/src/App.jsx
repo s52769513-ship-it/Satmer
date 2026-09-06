@@ -3,6 +3,7 @@ import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Users from './pages/Users.jsx';
+import Classes from './pages/Classes.jsx';
 import Reports from './pages/Reports.jsx';
 import Recordings from './pages/Recordings.jsx';
 import Messages from './pages/Messages.jsx';
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
         <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
+        <Route path="/classes" element={<RequireAuth><Classes /></RequireAuth>} />
         <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
         <Route path="/recordings" element={<RequireAuth><Recordings /></RequireAuth>} />
         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />

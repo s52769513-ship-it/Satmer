@@ -21,6 +21,8 @@ export default function Users() {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkGrade, setBulkGrade] = useState('');
+  const [bulkSettingGrade, setBulkSettingGrade] = useState(false);
   const fileInputRef = useRef(null);
 
   const loadUsers = () => {
@@ -74,6 +76,21 @@ export default function Users() {
       setError('שגיאה במחיקה מרובה');
     } finally {
       setBulkDeleting(false);
+    }
+  };
+
+  const bulkSetGrade = async () => {
+    if (selectedIds.size === 0 || !bulkGrade.trim()) return;
+    setBulkSettingGrade(true);
+    try {
+      await api.post('/admin/users/bulk-set-grade', { userIds: [...selectedIds], grade: bulkGrade.trim() });
+      setSelectedIds(new Set());
+      setBulkGrade('');
+      loadUsers();
+    } catch {
+      setError('שגיאה בעדכון כיתה');
+    } finally {
+      setBulkSettingGrade(false);
     }
   };
 
@@ -196,9 +213,28 @@ export default function Users() {
             </select>
           </div>
           {selectedIds.size > 0 && (
-            <button className="btn-secondary btn-danger" onClick={bulkDelete} disabled={bulkDeleting}>
-              {bulkDeleting ? 'מוחקת...' : `מחיקת ${selectedIds.size} נבחרות`}
-            </button>
+            <>
+              <div className="field">
+                <label>העברה לכיתה ({selectedIds.size} נבחרות)</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    list="grade-options"
+                    placeholder="שם כיתה..."
+                    value={bulkGrade}
+                    onChange={(e) => setBulkGrade(e.target.value)}
+                  />
+                  <datalist id="grade-options">
+                    {grades.map((g) => <option key={g} value={g} />)}
+                  </datalist>
+                  <button className="btn-secondary" onClick={bulkSetGrade} disabled={bulkSettingGrade || !bulkGrade.trim()}>
+                    {bulkSettingGrade ? 'מעדכנת...' : 'עדכון כיתה'}
+                  </button>
+                </div>
+              </div>
+              <button className="btn-secondary btn-danger" onClick={bulkDelete} disabled={bulkDeleting}>
+                {bulkDeleting ? 'מוחקת...' : `מחיקת ${selectedIds.size} נבחרות`}
+              </button>
+            </>
           )}
         </div>
 

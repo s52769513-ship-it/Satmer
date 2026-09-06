@@ -4,7 +4,7 @@ const { User, Activity, Completion, ActivityLog } = require('../models');
 const { validateIdNumber, getWeekStartDate, getWeekNumber, canUpdateActivityThisWeek, canUpdateCompletionThisMonth } = require('../utils/validators');
 const { speechCatalog } = require('../services/speech');
 const { PHRASES } = require('../utils/phrases');
-const { getParashaName, getHebrewMonthName, getHebrewYear } = require('../utils/hebrew-date');
+const { getParashaName, getHebrewMonthName, getHebrewYear, isCholHamoedWeek } = require('../utils/hebrew-date');
 
 /**
  * Technoline PBX Extension "API" module — inbound call handler.
@@ -210,6 +210,10 @@ function confirmGate(name) {
 // ---- Extension 1: weekly activity update ----
 
 async function handleExtension1(user, params) {
+  if (await isCholHamoedWeek()) {
+    return [simpleMessageModule('cholHamoedBlocked'), mainMenu()];
+  }
+
   const parasha = await getParashaName();
   const confirm1 = params[CONFIRM1_PARAM];
 
@@ -267,6 +271,10 @@ async function recordActivity(user, parasha) {
 // ---- Extension 2: monthly completion update ----
 
 async function handleExtension2(user, params) {
+  if (await isCholHamoedWeek()) {
+    return [simpleMessageModule('cholHamoedBlocked'), mainMenu()];
+  }
+
   const completionCount = await Completion.count({ where: { userId: user.id } });
   const nextNumber = completionCount + 1;
   const confirm2 = params[CONFIRM2_PARAM];

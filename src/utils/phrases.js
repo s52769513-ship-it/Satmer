@@ -22,6 +22,7 @@ const PHRASES = {
   systemError: 'אירעה שגיאה במערכת. אנא נסי שוב מאוחר יותר.',
   authError: 'שגיאת הזדהות. אנא פני למנהלת המערכת.',
   cancelled: 'הפעולה בוטלה.',
+  cholHamoedBlocked: 'בשבועות חול המועד אין אפשרות לעדכן פעילות חסד או השלמה. אנא נסי שוב לאחר החג.',
 
   // Fixed segments around dynamic numbers — the numbers themselves are
   // spoken natively by Technoline via `number` items, no synthesis needed.
