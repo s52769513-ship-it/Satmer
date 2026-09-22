@@ -7,6 +7,7 @@ import Classes from './pages/Classes.jsx';
 import Reports from './pages/Reports.jsx';
 import Recordings from './pages/Recordings.jsx';
 import Messages from './pages/Messages.jsx';
+import CallLog from './pages/CallLog.jsx';
 
 function RequireAuth({ children }) {
   const token = localStorage.getItem('token');
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
         <Route path="/recordings" element={<RequireAuth><Recordings /></RequireAuth>} />
         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
+        <Route path="/call-log" element={<RequireAuth><CallLog /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/reports', label: 'דוחות והורדות', icon: '📄' },
   { to: '/recordings', label: 'ניהול הקלטות', icon: '🎙️' },
   { to: '/messages', label: 'שליחת הודעות', icon: '📞' },
+  { to: '/call-log', label: 'יומן שיחות', icon: '📋' },
 ];
 
 export default function Layout({ children }) {

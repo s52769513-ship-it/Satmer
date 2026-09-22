@@ -353,10 +353,22 @@ async function handleExtension3(user, params) {
     };
   }
 
+  if (!['1', '2', '3'].includes(subMenu3)) {
+    return [simpleMessageModule('invalidChoice'), mainMenu()];
+  }
+
   const activities = await Activity.findAll({ where: { userId: user.id } });
   const completions = await Completion.findAll({ where: { userId: user.id } });
   const activityPoints = activities.reduce((sum, a) => sum + (a.points || 0), 0);
   const completionPoints = completions.reduce((sum, c) => sum + (c.points || 0), 0);
+
+  await ActivityLog.create({
+    userId: user.id,
+    action: 'extension_3_summary',
+    extension: 3,
+    status: 'success',
+    details: { subMenu3 },
+  });
 
   if (subMenu3 === '1') {
     return [
@@ -376,8 +388,6 @@ async function handleExtension3(user, params) {
       { type: 'hangup' },
     ];
   }
-
-  return [simpleMessageModule('invalidChoice'), mainMenu()];
 }
 
 // ---- Extension 4: choose weekly reminder day/hour ----
@@ -418,6 +428,14 @@ async function handleExtension4(user, params) {
 
   const dayName = REMINDER_DAYS[Number(day) - 1];
   await user.update({ notificationDay: dayName, notificationHour: hourNum });
+
+  await ActivityLog.create({
+    userId: user.id,
+    action: 'extension_4_reminder_setting',
+    extension: 4,
+    status: 'success',
+    details: { day: dayName, hour: hourNum },
+  });
 
   return [
     { type: 'simpleMessage', files: [clip('reminderSavedPrefix'), numberItem(hourNum), clip('reminderSavedSuffix')] },

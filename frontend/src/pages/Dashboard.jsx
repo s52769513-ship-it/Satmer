@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-
-const ACTION_LABELS = {
-  extension_1_activity_update: 'עדכון פעילות חסד',
-  extension_2_completion_update: 'עדכון השלמה',
-  extension_3_summary: 'שמיעת סיכום',
-  extension_4_reminder_setting: 'הגדרת תזכורת',
-};
+import { ACTION_LABELS } from '../utils/labels.js';
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -15,7 +9,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     api.get('/admin/statistics').then((res) => setStats(res.data)).catch(() => setError('שגיאה בטעינת נתונים'));
-    api.get('/admin/activity-logs?days=7').then((res) => setLogs(res.data.slice(0, 15))).catch(() => {});
+    api.get('/admin/activity-logs?days=7&pageSize=15').then((res) => setLogs(res.data.logs)).catch(() => {});
   }, []);
 
   return (

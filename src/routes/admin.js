@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const ExcelJS = require('exceljs');
+const { Op } = require('sequelize');
 const { User, Activity, Completion, ActivityLog } = require('../models');
 const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
 const { validateIdNumber } = require('../utils/validators');
@@ -337,26 +338,38 @@ router.delete('/users/:userId', authenticateToken, authorizeAdmin, async (req, r
   }
 });
 
-// Get activity logs (admin only)
+// Get activity logs (admin only) - the phone system's full call log, with
+// optional filtering (extension, status, student search) and pagination.
 router.get('/activity-logs', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
-    const { days = 30 } = req.query;
+    const { days = 30, extension, status, search, page = 1, pageSize = 50 } = req.query;
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    startDate.setDate(startDate.getDate() - Number(days));
 
-    const logs = await ActivityLog.findAll({
-      where: {
-        createdAt: { [require('sequelize').Op.gte]: startDate },
-      },
-      include: [{ model: User, as: 'user', attributes: ['name', 'idNumber'] }],
+    const where = { createdAt: { [Op.gte]: startDate } };
+    if (extension) where.extension = Number(extension);
+    if (status) where.status = status;
+
+    const userWhere = search
+      ? { [Op.or]: [{ name: { [Op.iLike]: `%${search}%` } }, { idNumber: { [Op.iLike]: `%${search}%` } }] }
+      : undefined;
+
+    const limit = Number(pageSize);
+    const offset = (Number(page) - 1) * limit;
+
+    const { rows, count } = await ActivityLog.findAndCountAll({
+      where,
+      include: [{ model: User, as: 'user', attributes: ['name', 'idNumber'], where: userWhere }],
       order: [['createdAt', 'DESC']],
+      limit,
+      offset,
     });
 
-    const withHebrewDate = await Promise.all(
-      logs.map(async (log) => ({ ...log.toJSON(), hebrewDate: await getHebrewDateString(log.createdAt) }))
+    const logs = await Promise.all(
+      rows.map(async (log) => ({ ...log.toJSON(), hebrewDate: await getHebrewDateString(log.createdAt) }))
     );
 
-    res.json(withHebrewDate);
+    res.json({ logs, total: count });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch logs' });
   }
